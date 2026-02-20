@@ -1,0 +1,46 @@
+{
+  "name": "@budgetclaw/plugin",
+  "version": "0.1.0",
+  "description": "Personal finance tracker plugin for OpenClaw — SQLite-backed, provider-agnostic",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "scripts": {
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun --format esm --external bun:sqlite --external keytar --external yahoo-finance2 --external papaparse",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "keytar": "^7.9.0",
+    "papaparse": "^5.4.1",
+    "yahoo-finance2": "^2.11.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/papaparse": "^5.3.14"
+  },
+  "openclaw": {
+    "extensions": [
+      {
+        "type": "skill",
+        "path": "./skills/budgetclaw/SKILL.md"
+      }
+    ]
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}

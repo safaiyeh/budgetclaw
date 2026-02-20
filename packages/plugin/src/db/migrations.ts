@@ -1,0 +1,156 @@
+import type { Database } from 'bun:sqlite';
+import { BUILTIN_CATEGORIES } from '../categories/taxonomy.js';
+
+/**
+ * Each migration is keyed by its target user_version.
+ * Migrations run in order from current+1 up to the latest version.
+ */
+const MIGRATIONS: Record<number, (db: Database) => void> = {
+  1: (db) => {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id           TEXT PRIMARY KEY,
+        name         TEXT NOT NULL,
+        institution  TEXT,
+        type         TEXT NOT NULL,
+        currency     TEXT NOT NULL DEFAULT 'USD',
+        balance      REAL,
+        source       TEXT NOT NULL DEFAULT 'manual',
+        external_id  TEXT,
+        is_active    INTEGER NOT NULL DEFAULT 1,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL
+      )
+    `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS transactions (
+        id           TEXT PRIMARY KEY,
+        account_id   TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        date         TEXT NOT NULL,
+        amount       REAL NOT NULL,
+        currency     TEXT NOT NULL DEFAULT 'USD',
+        description  TEXT,
+        merchant     TEXT,
+        category     TEXT,
+        subcategory  TEXT,
+        type         TEXT,
+        source       TEXT NOT NULL DEFAULT 'manual',
+        external_id  TEXT,
+        pending      INTEGER NOT NULL DEFAULT 0,
+        notes        TEXT,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL,
+        UNIQUE(account_id, external_id)
+      )
+    `);
+
+    db.run(`CREATE INDEX IF NOT EXISTS idx_tx_date     ON transactions(date)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_tx_account  ON transactions(account_id)`);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category)`);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id         TEXT PRIMARY KEY,
+        name       TEXT NOT NULL UNIQUE,
+        parent     TEXT,
+        is_builtin INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL
+      )
+    `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS budgets (
+        id         TEXT PRIMARY KEY,
+        category   TEXT NOT NULL,
+        amount     REAL NOT NULL,
+        period     TEXT NOT NULL DEFAULT 'monthly',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(category, period)
+      )
+    `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS portfolio_holdings (
+        id           TEXT PRIMARY KEY,
+        account_id   TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        symbol       TEXT NOT NULL,
+        name         TEXT,
+        quantity     REAL NOT NULL,
+        price        REAL,
+        value        REAL,
+        currency     TEXT NOT NULL DEFAULT 'USD',
+        asset_type   TEXT,
+        price_source TEXT,
+        price_as_of  TEXT,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL,
+        UNIQUE(account_id, symbol)
+      )
+    `);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS net_worth_snapshots (
+        id                TEXT PRIMARY KEY,
+        date              TEXT NOT NULL,
+        total_assets      REAL NOT NULL,
+        total_liabilities REAL NOT NULL,
+        net_worth         REAL NOT NULL,
+        breakdown         TEXT,
+        notes             TEXT,
+        created_at        TEXT NOT NULL
+      )
+    `);
+    db.run(`CREATE INDEX IF NOT EXISTS idx_nw_date ON net_worth_snapshots(date)`);
+
+    db.run(`
+      CREATE TABLE IF NOT EXISTS provider_connections (
+        id               TEXT PRIMARY KEY,
+        provider         TEXT NOT NULL,
+        institution_id   TEXT,
+        institution_name TEXT,
+        keychain_key     TEXT NOT NULL,
+        item_id          TEXT,
+        cursor           TEXT,
+        last_synced_at   TEXT,
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL
+      )
+    `);
+
+    // Seed built-in categories
+    const now = new Date().toISOString();
+    const insertCategory = db.prepare(
+      `INSERT OR IGNORE INTO categories (id, name, parent, is_builtin, created_at)
+       VALUES (?, ?, ?, 1, ?)`
+    );
+    for (const { id, name, parent } of BUILTIN_CATEGORIES) {
+      insertCategory.run(id, name, parent ?? null, now);
+    }
+  },
+};
+
+export const LATEST_VERSION = Math.max(...Object.keys(MIGRATIONS).map(Number));
+
+export function runMigrations(db: Database): void {
+  // Enable foreign keys
+  db.run('PRAGMA foreign_keys = ON');
+
+  const currentVersion = (db.query('PRAGMA user_version').get() as { user_version: number })
+    .user_version;
+
+  if (currentVersion >= LATEST_VERSION) {
+    return;
+  }
+
+  for (let v = currentVersion + 1; v <= LATEST_VERSION; v++) {
+    const migration = MIGRATIONS[v];
+    if (!migration) continue;
+
+    db.transaction(() => {
+      migration(db);
+      db.run(`PRAGMA user_version = ${v}`);
+    })();
+  }
+}
