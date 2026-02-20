@@ -33,6 +33,18 @@ export interface RawBalance {
   currency?: string;
 }
 
+export interface RawHolding {
+  account_external_id: string;  // links to RawAccount.external_id
+  symbol: string;               // ticker symbol or Plaid security_id fallback
+  name?: string;
+  quantity: number;
+  price?: number;               // institution_price
+  price_as_of?: string;         // institution_price_as_of (YYYY-MM-DD)
+  value?: number;               // institution_value
+  currency?: string;
+  asset_type?: string;          // mapped from Plaid security.type (string, not AssetType union)
+}
+
 export interface DataProvider {
   readonly name: string;
 
@@ -46,4 +58,6 @@ export interface DataProvider {
   }>;
 
   getBalances(): Promise<RawBalance[]>;
+
+  getHoldings?(): Promise<RawHolding[]>;
 }

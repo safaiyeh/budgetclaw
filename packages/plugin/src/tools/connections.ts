@@ -3,6 +3,8 @@ import { toRow } from '../db/types.js';
 import type { ProviderConnectionRow } from '../db/types.js';
 import { getCredential, deleteCredential } from '../credentials/keychain.js';
 import type { ProviderRegistry } from '../providers/registry.js';
+import { upsertHolding } from './portfolio.js';
+import type { AssetType } from '../prices/interface.js';
 
 function now(): string {
   return new Date().toISOString();
@@ -50,6 +52,7 @@ export interface SyncConnectionResult {
   transactions_added: number;
   transactions_modified: number;
   transactions_removed: number;
+  holdings_synced: number;
   last_synced_at: string;
 }
 
@@ -84,6 +87,7 @@ export async function syncConnection(
   let transactions_added = 0;
   let transactions_modified = 0;
   let transactions_removed = 0;
+  let holdings_synced = 0;
 
   // 4. Sync accounts — upsert by (source, external_id)
   const rawAccounts = await provider.getAccounts();
@@ -203,7 +207,35 @@ export async function syncConnection(
     }
   }
 
-  // 7. Persist cursor + last_synced_at
+  // 7. Sync holdings — only for providers that support it (e.g. Plaid investments)
+  if (provider.getHoldings) {
+    const rawHoldings = await provider.getHoldings();
+    const updatePriceSourceStmt = db.prepare(
+      `UPDATE portfolio_holdings
+       SET price_source = 'plaid', price_as_of = ?, updated_at = ?
+       WHERE account_id = ? AND symbol = ?`
+    );
+    for (const raw of rawHoldings) {
+      const accountId = accountIdMap.get(raw.account_external_id);
+      if (!accountId) continue;
+      upsertHolding(db, {
+        account_id: accountId,
+        symbol: raw.symbol,
+        name: raw.name,
+        quantity: raw.quantity,
+        price: raw.price,
+        asset_type: raw.asset_type as AssetType | undefined,
+        currency: raw.currency,
+      });
+      // upsertHolding labels price_source='manual'; correct it to 'plaid'
+      if (raw.price != null) {
+        updatePriceSourceStmt.run(raw.price_as_of ?? null, ts, accountId, raw.symbol.toUpperCase());
+      }
+      holdings_synced++;
+    }
+  }
+
+  // 8. Persist cursor + last_synced_at
   db.prepare(
     'UPDATE provider_connections SET cursor = ?, last_synced_at = ?, updated_at = ? WHERE id = ?'
   ).run(nextCursor, ts, ts, id);
@@ -215,6 +247,7 @@ export async function syncConnection(
     transactions_added,
     transactions_modified,
     transactions_removed,
+    holdings_synced,
     last_synced_at: ts,
   };
 }

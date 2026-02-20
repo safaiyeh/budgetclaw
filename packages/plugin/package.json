@@ -27,6 +27,7 @@
     "keytar": "^7.9.0",
     "papaparse": "^5.4.1",
     "pdf-parse": "^1.1.1",
+    "plaid": "^41.1.0",
     "yahoo-finance2": "^2.11.3"
   },
   "peerDependencies": {
