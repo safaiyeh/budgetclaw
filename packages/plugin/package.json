@@ -33,7 +33,8 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/papaparse": "^5.3.14"
+    "@types/papaparse": "^5.3.14",
+    "typescript": "^5.9.3"
   },
   "openclaw": {
     "extensions": ["./src/index.ts"]
