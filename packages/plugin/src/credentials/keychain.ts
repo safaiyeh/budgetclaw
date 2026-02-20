@@ -19,7 +19,7 @@ async function getKeytar(): Promise<typeof import('keytar')> {
       _keytar = await import('keytar');
     } catch {
       throw new Error(
-        'keytar is not available. Install it with: bun add keytar\n' +
+        'keytar is not available. Install it with: pnpm add keytar\n' +
         'Note: keytar requires native bindings and may need build tools.'
       );
     }

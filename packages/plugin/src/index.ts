@@ -23,7 +23,8 @@ import { upsertHolding, deleteHolding, getPortfolio, refreshPrices } from './too
 import { snapshotNetWorth, getNetWorthHistory } from './tools/net-worth.js';
 import { getCategories, addCategory, deleteCategory } from './tools/categories.js';
 import { importCsv, exportCsv } from './tools/import-export.js';
-import { listConnections, removeConnection } from './tools/connections.js';
+import { listConnections, removeConnection, syncConnection } from './tools/connections.js';
+import { defaultRegistry } from './providers/registry.js';
 
 // ─── Local helpers ────────────────────────────────────────────────────────────
 
@@ -442,6 +443,19 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
     },
     execute: (p) => removeConnection(db, (p as {id:string}).id),
   }));
+
+  api.registerTool(tool({
+    name: 'budgetclaw_sync_connection',
+    description: 'Sync transactions and balances from a connected provider (e.g. Plaid). Upserts accounts, applies added/modified/removed transactions, updates balances, and advances the cursor.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Connection ID to sync' },
+      },
+      required: ['id'],
+    },
+    execute: (p) => syncConnection(db, (p as {id:string}).id, defaultRegistry),
+  }));
 }
 
 export default { register };
@@ -452,4 +466,6 @@ export type { AccountRow, TransactionRow, BudgetRow, PortfolioHoldingRow, NetWor
 export type { DataProvider, RawAccount, RawTransaction, RawBalance } from './providers/interface.js';
 export type { PriceProvider, PriceResult, AssetType } from './prices/interface.js';
 export { CsvDataProvider } from './providers/csv.js';
+export { defaultRegistry, ProviderRegistry } from './providers/registry.js';
+export type { ProviderFactory, ProviderConnectionMeta } from './providers/registry.js';
 export { priceRegistry } from './prices/registry.js';
