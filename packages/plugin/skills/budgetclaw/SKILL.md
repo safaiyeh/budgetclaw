@@ -180,6 +180,30 @@ Re-importing is safe — duplicates are automatically skipped.
 
 ---
 
+## Statement Parsing
+
+Activate this workflow when the user says things like:
+- "parse my statement", "import from PDF", "read my bank statement"
+- "I downloaded my statement", "process my Chase PDF", "import transactions from my statement"
+
+**Workflow:**
+
+| Step | Tool | Notes |
+|------|------|-------|
+| 1 | `budgetclaw_get_accounts` | Identify the right account to import into |
+| 2 | `budgetclaw_read_statement { file_path }` | Extract full text from ALL pages — never skip this |
+| 3 | *(parse internally)* | Identify each transaction: date, merchant/description, amount |
+| 4 | *(categorize internally)* | Map to BudgetClaw categories using the taxonomy above |
+| 5 | `budgetclaw_import_transactions { account_id, transactions: [...] }` | Bulk insert all at once |
+
+**Key notes:**
+- Always call `budgetclaw_read_statement` first — PDF channel previews are truncated; this tool extracts all pages.
+- When possible, verify that the sum of imported transactions matches the statement's closing balance or total charges.
+- Re-importing the same statement is safe — rows with a matching `external_id` are silently skipped. Supply `external_id` on each transaction (e.g. `"stmt-{date}-{amount}-{description_hash}"`) to enable reliable deduplication.
+- The `imported` / `skipped` counts in the result confirm what happened.
+
+---
+
 ## Key Rules
 
 - Dates must be `YYYY-MM-DD`

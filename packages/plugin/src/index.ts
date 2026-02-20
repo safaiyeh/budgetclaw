@@ -23,6 +23,7 @@ import { upsertHolding, deleteHolding, getPortfolio, refreshPrices } from './too
 import { snapshotNetWorth, getNetWorthHistory } from './tools/net-worth.js';
 import { getCategories, addCategory, deleteCategory } from './tools/categories.js';
 import { importCsv, exportCsv } from './tools/import-export.js';
+import { readStatement, importTransactions } from './tools/statements.js';
 import { listConnections, removeConnection, syncConnection } from './tools/connections.js';
 import { defaultRegistry } from './providers/registry.js';
 
@@ -422,6 +423,52 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
       required: ['file_path'],
     },
     execute: (p) => exportCsv(db, p as Parameters<typeof exportCsv>[1]),
+  }));
+
+  api.registerTool(tool({
+    name: 'budgetclaw_read_statement',
+    description: 'Extract text content from a bank statement file (PDF or plain text). Returns the full text from ALL pages so you can identify and extract transactions. Always call this before trying to parse a statement — PDF previews are truncated.',
+    parameters: {
+      type: 'object',
+      properties: {
+        file_path: { type: 'string', description: 'Path to the statement file (PDF or plain text). Supports ~/.' },
+      },
+      required: ['file_path'],
+    },
+    execute: (p) => readStatement(p as Parameters<typeof readStatement>[0]),
+  }));
+
+  api.registerTool(tool({
+    name: 'budgetclaw_import_transactions',
+    description: 'Bulk import a list of pre-parsed transactions into an account in one call. Use this after reading a statement to store all identified transactions at once.',
+    parameters: {
+      type: 'object',
+      properties: {
+        account_id: { type: 'string', description: 'Account ID to import transactions into' },
+        transactions: {
+          type: 'array',
+          description: 'List of transactions to import',
+          items: {
+            type: 'object',
+            properties: {
+              date:        { type: 'string',  description: 'Transaction date (YYYY-MM-DD)' },
+              amount:      { type: 'number',  description: 'Amount — negative = expense, positive = income' },
+              description: { type: 'string',  description: 'Transaction description' },
+              merchant:    { type: 'string',  description: 'Merchant name' },
+              category:    { type: 'string',  description: 'Category' },
+              subcategory: { type: 'string',  description: 'Subcategory' },
+              type:        { type: 'string',  description: 'Transaction type (debit|credit|transfer)' },
+              pending:     { type: 'boolean', description: 'Whether transaction is pending' },
+              notes:       { type: 'string',  description: 'Additional notes' },
+              external_id: { type: 'string',  description: 'Unique ID for deduplication on re-import' },
+            },
+            required: ['date', 'amount'],
+          },
+        },
+      },
+      required: ['account_id', 'transactions'],
+    },
+    execute: (p) => importTransactions(db, p as Parameters<typeof importTransactions>[1]),
   }));
 
   // ── Connections ───────────────────────────────────────────────────────────
