@@ -24,38 +24,88 @@ import { getCategories, addCategory, deleteCategory } from './tools/categories.j
 import { importCsv, exportCsv } from './tools/import-export.js';
 import { listConnections, removeConnection } from './tools/connections.js';
 
-// ─── OpenClaw plugin API interface ───────────────────────────────────────────
-// The actual types come from @openclaw/sdk — typed loosely here so the plugin
-// compiles without requiring the SDK as a hard dep.
+// ─── OpenClaw plugin API types ────────────────────────────────────────────────
+// Mirrors OpenClawPluginApi from "openclaw/plugin-sdk" (openclaw is a peerDependency
+// so it's present at runtime, but we define the subset we use here to avoid
+// pulling openclaw into devDependencies during development — it's a heavy install).
+// Verified against: https://docs.openclaw.ai/plugins/agent-tools and real plugins
+// (claw-search, openclaw-shield).
 
-type ToolHandler = (input: unknown) => Promise<unknown> | unknown;
+interface ToolContent {
+  type: 'text';
+  text: string;
+}
 
-interface ToolDefinition {
+interface ToolResult {
+  content: ToolContent[];
+  details?: unknown;
+}
+
+interface AgentTool {
   name: string;
   description: string;
-  inputSchema: {
+  /** JSON Schema object (TypeBox TSchema in OpenClaw internals, plain object works at runtime) */
+  parameters: {
     type: 'object';
     properties: Record<string, unknown>;
     required?: string[];
   };
-  handler: ToolHandler;
+  execute(toolCallId: string, params: Record<string, unknown>): Promise<ToolResult>;
 }
 
-interface PluginApi {
-  registerTool(tool: ToolDefinition): void;
+export interface OpenClawPluginApi {
+  registerTool(tool: AgentTool, opts?: { optional?: boolean }): void;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function ok(data: unknown): ToolResult {
+  return {
+    content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+    details: data,
+  };
+}
+
+function err(e: unknown): ToolResult & { isError: true } {
+  const message = e instanceof Error ? e.message : String(e);
+  return {
+    content: [{ type: 'text', text: `Error: ${message}` }],
+    details: null,
+    isError: true,
+  };
+}
+
+/**
+ * Wraps a tool handler with error handling and result serialisation.
+ */
+function tool(
+  def: Omit<AgentTool, 'execute'> & {
+    execute: (params: unknown) => Promise<unknown> | unknown;
+  }
+): AgentTool {
+  return {
+    ...def,
+    execute: async (_toolCallId, params) => {
+      try {
+        return ok(await def.execute(params));
+      } catch (e) {
+        return err(e);
+      }
+    },
+  };
 }
 
 // ─── Register function ────────────────────────────────────────────────────────
 
-export function register(api: PluginApi, dbPath?: string): void {
+export function register(api: OpenClawPluginApi, dbPath?: string): void {
   const db = getDb(dbPath);
 
   // ── Accounts ──────────────────────────────────────────────────────────────
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_add_account',
     description: 'Add a new financial account (checking, savings, credit, investment, crypto, loan, or other)',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         name:        { type: 'string',  description: 'Account name (e.g. "Chase Checking")' },
@@ -66,20 +116,20 @@ export function register(api: PluginApi, dbPath?: string): void {
       },
       required: ['name', 'type'],
     },
-    handler: (input) => addAccount(db, input as Parameters<typeof addAccount>[1]),
-  });
+    execute: (p) => addAccount(db, p as Parameters<typeof addAccount>[1]),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_get_accounts',
     description: 'List all active financial accounts with their current balances',
-    inputSchema: { type: 'object', properties: {} },
-    handler: () => getAccounts(db),
-  });
+    parameters: { type: 'object', properties: {} },
+    execute: () => getAccounts(db),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_update_account_balance',
     description: 'Update the balance of an account manually',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         id:      { type: 'string', description: 'Account ID' },
@@ -87,37 +137,37 @@ export function register(api: PluginApi, dbPath?: string): void {
       },
       required: ['id', 'balance'],
     },
-    handler: (input) => updateAccountBalance(db, input as Parameters<typeof updateAccountBalance>[1]),
-  });
+    execute: (p) => updateAccountBalance(db, p as Parameters<typeof updateAccountBalance>[1]),
+  }));
 
   // ── Transactions ──────────────────────────────────────────────────────────
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_add_transaction',
     description: 'Add a transaction manually. Amount is positive for inflows (income) and negative for outflows (expenses).',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
-        account_id:   { type: 'string', description: 'Account ID to add transaction to' },
-        date:         { type: 'string', description: 'Transaction date (YYYY-MM-DD)' },
-        amount:       { type: 'number', description: 'Amount — positive = inflow/income, negative = outflow/expense' },
-        description:  { type: 'string', description: 'Transaction description' },
-        merchant:     { type: 'string', description: 'Merchant name' },
-        category:     { type: 'string', description: 'Category (e.g. "Food & Dining", "Transport")' },
-        subcategory:  { type: 'string', description: 'Subcategory (e.g. "Groceries", "Rideshare")' },
-        type:         { type: 'string', enum: ['debit','credit','transfer'], description: 'Transaction type' },
-        pending:      { type: 'boolean', description: 'Whether transaction is pending' },
-        notes:        { type: 'string', description: 'Additional notes' },
+        account_id:  { type: 'string',  description: 'Account ID to add transaction to' },
+        date:        { type: 'string',  description: 'Transaction date (YYYY-MM-DD)' },
+        amount:      { type: 'number',  description: 'Amount — positive = inflow/income, negative = outflow/expense' },
+        description: { type: 'string',  description: 'Transaction description' },
+        merchant:    { type: 'string',  description: 'Merchant name' },
+        category:    { type: 'string',  description: 'Category (e.g. "Food & Dining", "Transport")' },
+        subcategory: { type: 'string',  description: 'Subcategory (e.g. "Groceries", "Rideshare")' },
+        type:        { type: 'string',  enum: ['debit','credit','transfer'], description: 'Transaction type' },
+        pending:     { type: 'boolean', description: 'Whether transaction is pending' },
+        notes:       { type: 'string',  description: 'Additional notes' },
       },
       required: ['account_id', 'date', 'amount'],
     },
-    handler: (input) => addTransaction(db, input as Parameters<typeof addTransaction>[1]),
-  });
+    execute: (p) => addTransaction(db, p as Parameters<typeof addTransaction>[1]),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_get_transactions',
     description: 'Query transactions with optional filters',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         account_id: { type: 'string',  description: 'Filter by account ID' },
@@ -129,13 +179,13 @@ export function register(api: PluginApi, dbPath?: string): void {
         offset:     { type: 'integer', description: 'Pagination offset' },
       },
     },
-    handler: (input) => getTransactions(db, input as Parameters<typeof getTransactions>[1]),
-  });
+    execute: (p) => getTransactions(db, p as Parameters<typeof getTransactions>[1]),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_update_transaction',
-    description: 'Update a transaction\'s description, category, merchant, notes, date, or amount',
-    inputSchema: {
+    description: "Update a transaction's description, category, merchant, notes, date, or amount",
+    parameters: {
       type: 'object',
       properties: {
         id:          { type: 'string', description: 'Transaction ID' },
@@ -149,24 +199,24 @@ export function register(api: PluginApi, dbPath?: string): void {
       },
       required: ['id'],
     },
-    handler: (input) => updateTransaction(db, input as Parameters<typeof updateTransaction>[1]),
-  });
+    execute: (p) => updateTransaction(db, p as Parameters<typeof updateTransaction>[1]),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_delete_transaction',
     description: 'Delete a transaction by ID',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: { id: { type: 'string', description: 'Transaction ID' } },
       required: ['id'],
     },
-    handler: (input) => deleteTransaction(db, (input as { id: string }).id),
-  });
+    execute: (p) => deleteTransaction(db, (p as {id:string}).id),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_get_spending_summary',
     description: 'Get spending totals grouped by category for a date range',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         from_date:  { type: 'string', description: 'Start date (YYYY-MM-DD)' },
@@ -175,117 +225,117 @@ export function register(api: PluginApi, dbPath?: string): void {
       },
       required: ['from_date', 'to_date'],
     },
-    handler: (input) => getSpendingSummary(db, input as Parameters<typeof getSpendingSummary>[1]),
-  });
+    execute: (p) => getSpendingSummary(db, p as Parameters<typeof getSpendingSummary>[1]),
+  }));
 
   // ── Budgets ───────────────────────────────────────────────────────────────
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_set_budget',
     description: 'Set or update a spending budget for a category',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
-        category: { type: 'string', description: 'Category name (must match a category)' },
+        category: { type: 'string', description: 'Category name' },
         amount:   { type: 'number', description: 'Budget amount' },
         period:   { type: 'string', enum: ['monthly','weekly','yearly'], description: 'Budget period (default: monthly)' },
       },
       required: ['category', 'amount'],
     },
-    handler: (input) => setBudget(db, input as Parameters<typeof setBudget>[1]),
-  });
+    execute: (p) => setBudget(db, p as Parameters<typeof setBudget>[1]),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_get_budgets',
     description: 'List all budgets with actual spending vs. budgeted amounts for the current period',
-    inputSchema: { type: 'object', properties: {} },
-    handler: () => getBudgets(db),
-  });
+    parameters: { type: 'object', properties: {} },
+    execute: () => getBudgets(db),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_delete_budget',
     description: 'Delete a budget by ID',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: { id: { type: 'string', description: 'Budget ID' } },
       required: ['id'],
     },
-    handler: (input) => deleteBudget(db, (input as { id: string }).id),
-  });
+    execute: (p) => deleteBudget(db, (p as {id:string}).id),
+  }));
 
   // ── Portfolio ─────────────────────────────────────────────────────────────
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_upsert_holding',
     description: 'Add or update a portfolio holding (stock, ETF, crypto, etc.)',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         account_id: { type: 'string', description: 'Investment account ID' },
         symbol:     { type: 'string', description: 'Ticker symbol (e.g. AAPL, BTC)' },
         name:       { type: 'string', description: 'Security name (optional)' },
         quantity:   { type: 'number', description: 'Number of shares/units' },
-        price:      { type: 'number', description: 'Current price per unit (optional — will be fetched if omitted)' },
+        price:      { type: 'number', description: 'Current price per unit (optional)' },
         asset_type: { type: 'string', enum: ['stock','etf','crypto','bond','other'], description: 'Asset type' },
       },
       required: ['account_id', 'symbol', 'quantity'],
     },
-    handler: (input) => upsertHolding(db, input as Parameters<typeof upsertHolding>[1]),
-  });
+    execute: (p) => upsertHolding(db, p as Parameters<typeof upsertHolding>[1]),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_delete_holding',
     description: 'Remove a portfolio holding by ID',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: { id: { type: 'string', description: 'Holding ID' } },
       required: ['id'],
     },
-    handler: (input) => deleteHolding(db, (input as { id: string }).id),
-  });
+    execute: (p) => deleteHolding(db, (p as {id:string}).id),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_get_portfolio',
     description: 'Get all portfolio holdings with latest prices and total value',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         account_id: { type: 'string', description: 'Filter by account ID (optional)' },
       },
     },
-    handler: (input) => getPortfolio(db, input as Parameters<typeof getPortfolio>[1]),
-  });
+    execute: (p) => getPortfolio(db, p as Parameters<typeof getPortfolio>[1]),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_refresh_prices',
     description: 'Fetch latest market prices for all portfolio holdings (uses Yahoo Finance for stocks/ETFs, CoinGecko for crypto)',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         account_id: { type: 'string', description: 'Refresh only holdings in this account (optional)' },
       },
     },
-    handler: (input) => refreshPrices(db, (input as { account_id?: string }).account_id),
-  });
+    execute: (p) => refreshPrices(db, (p as {account_id?:string}).account_id),
+  }));
 
   // ── Net Worth ─────────────────────────────────────────────────────────────
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_snapshot_net_worth',
     description: 'Calculate current net worth from all account balances and portfolio values, and save a snapshot',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         notes: { type: 'string', description: 'Optional notes for this snapshot' },
       },
     },
-    handler: (input) => snapshotNetWorth(db, input as Parameters<typeof snapshotNetWorth>[1]),
-  });
+    execute: (p) => snapshotNetWorth(db, p as Parameters<typeof snapshotNetWorth>[1]),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_get_net_worth_history',
     description: 'Get net worth history over time',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         from_date: { type: 'string',  description: 'Start date (YYYY-MM-DD)' },
@@ -293,22 +343,22 @@ export function register(api: PluginApi, dbPath?: string): void {
         limit:     { type: 'integer', description: 'Max snapshots to return (default 90)' },
       },
     },
-    handler: (input) => getNetWorthHistory(db, input as Parameters<typeof getNetWorthHistory>[1]),
-  });
+    execute: (p) => getNetWorthHistory(db, p as Parameters<typeof getNetWorthHistory>[1]),
+  }));
 
   // ── Categories ────────────────────────────────────────────────────────────
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_get_categories',
     description: 'List all categories (built-in and user-defined)',
-    inputSchema: { type: 'object', properties: {} },
-    handler: () => getCategories(db),
-  });
+    parameters: { type: 'object', properties: {} },
+    execute: () => getCategories(db),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_add_category',
     description: 'Add a user-defined category',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         name:   { type: 'string', description: 'Category name' },
@@ -316,31 +366,31 @@ export function register(api: PluginApi, dbPath?: string): void {
       },
       required: ['name'],
     },
-    handler: (input) => addCategory(db, input as Parameters<typeof addCategory>[1]),
-  });
+    execute: (p) => addCategory(db, p as Parameters<typeof addCategory>[1]),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_delete_category',
     description: 'Delete a user-defined category (built-in categories cannot be deleted)',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: { id: { type: 'string', description: 'Category ID' } },
       required: ['id'],
     },
-    handler: (input) => deleteCategory(db, (input as { id: string }).id),
-  });
+    execute: (p) => deleteCategory(db, (p as {id:string}).id),
+  }));
 
   // ── Import / Export ───────────────────────────────────────────────────────
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_import_csv',
     description: 'Import transactions from a CSV file. Automatically deduplicates using external_id.',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
-        file_path:      { type: 'string', description: 'Absolute path to the CSV file' },
-        account_id:     { type: 'string', description: 'Account ID to import transactions into' },
-        date_format:    { type: 'string', description: 'Date format hint: YYYY-MM-DD | MM/DD/YYYY | DD/MM/YYYY' },
+        file_path:      { type: 'string',  description: 'Absolute path to the CSV file' },
+        account_id:     { type: 'string',  description: 'Account ID to import transactions into' },
+        date_format:    { type: 'string',  description: 'Date format hint: YYYY-MM-DD | MM/DD/YYYY | DD/MM/YYYY' },
         invert_amounts: { type: 'boolean', description: 'Invert amount signs (use when positive = expense in your CSV)' },
         mapping: {
           type: 'object',
@@ -360,13 +410,13 @@ export function register(api: PluginApi, dbPath?: string): void {
       },
       required: ['file_path', 'account_id'],
     },
-    handler: (input) => importCsv(db, input as Parameters<typeof importCsv>[1]),
-  });
+    execute: (p) => importCsv(db, p as Parameters<typeof importCsv>[1]),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_export_csv',
     description: 'Export transactions to a CSV file',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: {
         file_path:  { type: 'string', description: 'Output file path' },
@@ -376,34 +426,33 @@ export function register(api: PluginApi, dbPath?: string): void {
       },
       required: ['file_path'],
     },
-    handler: (input) => exportCsv(db, input as Parameters<typeof exportCsv>[1]),
-  });
+    execute: (p) => exportCsv(db, p as Parameters<typeof exportCsv>[1]),
+  }));
 
   // ── Connections ───────────────────────────────────────────────────────────
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_list_connections',
     description: 'List all provider connections (e.g. Plaid-linked institutions)',
-    inputSchema: { type: 'object', properties: {} },
-    handler: () => listConnections(db),
-  });
+    parameters: { type: 'object', properties: {} },
+    execute: () => listConnections(db),
+  }));
 
-  api.registerTool({
+  api.registerTool(tool({
     name: 'budgetclaw_remove_connection',
     description: 'Remove a provider connection and delete its credential from the OS keychain',
-    inputSchema: {
+    parameters: {
       type: 'object',
       properties: { id: { type: 'string', description: 'Connection ID' } },
       required: ['id'],
     },
-    handler: (input) => removeConnection(db, (input as { id: string }).id),
-  });
+    execute: (p) => removeConnection(db, (p as {id:string}).id),
+  }));
 }
 
 export default { register };
 
 // Re-export public types and interfaces for consumers
-export type { PluginApi };
 export { getDb, resetDb } from './db/index.js';
 export type { AccountRow, TransactionRow, BudgetRow, PortfolioHoldingRow, NetWorthSnapshotRow } from './db/types.js';
 export type { DataProvider, RawAccount, RawTransaction, RawBalance } from './providers/interface.js';

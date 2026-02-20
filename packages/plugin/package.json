@@ -28,17 +28,15 @@
     "papaparse": "^5.4.1",
     "yahoo-finance2": "^2.11.3"
   },
+  "peerDependencies": {
+    "openclaw": "*"
+  },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/papaparse": "^5.3.14"
   },
   "openclaw": {
-    "extensions": [
-      {
-        "type": "skill",
-        "path": "./skills/budgetclaw/SKILL.md"
-      }
-    ]
+    "extensions": ["./src/index.ts"]
   },
   "engines": {
     "bun": ">=1.0.0"
