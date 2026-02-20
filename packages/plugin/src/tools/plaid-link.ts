@@ -138,7 +138,7 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
   const linkTokenResponse = await client.linkTokenCreate({
     user: { client_user_id: 'budgetclaw-user' },
     client_name: 'BudgetClaw',
-    products: [Products.Transactions],
+    products: [Products.Transactions, Products.Investments],
     country_codes: [CountryCode.Us],
     language: 'en',
     redirect_uri: redirectUri,
