@@ -6,6 +6,7 @@
  * and runs any pending migrations automatically.
  */
 
+import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { getDb } from './db/index.js';
 
 // Tool handlers
@@ -24,12 +25,7 @@ import { getCategories, addCategory, deleteCategory } from './tools/categories.j
 import { importCsv, exportCsv } from './tools/import-export.js';
 import { listConnections, removeConnection } from './tools/connections.js';
 
-// ─── OpenClaw plugin API types ────────────────────────────────────────────────
-// Mirrors OpenClawPluginApi from "openclaw/plugin-sdk" (openclaw is a peerDependency
-// so it's present at runtime, but we define the subset we use here to avoid
-// pulling openclaw into devDependencies during development — it's a heavy install).
-// Verified against: https://docs.openclaw.ai/plugins/agent-tools and real plugins
-// (claw-search, openclaw-shield).
+// ─── Local helpers ────────────────────────────────────────────────────────────
 
 interface ToolContent {
   type: 'text';
@@ -38,23 +34,8 @@ interface ToolContent {
 
 interface ToolResult {
   content: ToolContent[];
-  details?: unknown;
-}
-
-interface AgentTool {
-  name: string;
-  description: string;
-  /** JSON Schema object (TypeBox TSchema in OpenClaw internals, plain object works at runtime) */
-  parameters: {
-    type: 'object';
-    properties: Record<string, unknown>;
-    required?: string[];
-  };
-  execute(toolCallId: string, params: Record<string, unknown>): Promise<ToolResult>;
-}
-
-export interface OpenClawPluginApi {
-  registerTool(tool: AgentTool, opts?: { optional?: boolean }): void;
+  details: unknown;      // required — matches AgentToolResult<unknown> from openclaw internals
+  isError?: true;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -75,17 +56,30 @@ function err(e: unknown): ToolResult & { isError: true } {
   };
 }
 
+// JSON Schema object — plain objects work at runtime; OpenClaw uses TypeBox internally
+// but accepts any object that satisfies the shape.
+type JsonSchema = { type: 'object'; properties: Record<string, unknown>; required?: string[] };
+
 /**
  * Wraps a tool handler with error handling and result serialisation.
+ * Returns an AnyAgentTool compatible with OpenClawPluginApi.registerTool().
  */
-function tool(
-  def: Omit<AgentTool, 'execute'> & {
-    execute: (params: unknown) => Promise<unknown> | unknown;
-  }
-): AgentTool {
+function tool(def: {
+  name: string;
+  description: string;
+  parameters: JsonSchema;
+  execute: (params: unknown) => Promise<unknown> | unknown;
+}) {
+  // Derive display label from tool name: "budgetclaw_add_account" → "Add Account"
+  const label = def.name
+    .replace(/^budgetclaw_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
   return {
     ...def,
-    execute: async (_toolCallId, params) => {
+    label,
+    execute: async (_toolCallId: string, params: unknown) => {
       try {
         return ok(await def.execute(params));
       } catch (e) {

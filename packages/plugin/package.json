@@ -29,7 +29,7 @@
     "yahoo-finance2": "^2.11.3"
   },
   "peerDependencies": {
-    "openclaw": "*"
+    "openclaw": "^2026.2.19-2"
   },
   "devDependencies": {
     "@types/bun": "latest",
