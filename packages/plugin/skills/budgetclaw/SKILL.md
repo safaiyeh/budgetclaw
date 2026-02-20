@@ -204,6 +204,64 @@ Activate this workflow when the user says things like:
 
 ---
 
+## Plaid Integration
+
+Connect real bank accounts to automatically sync transactions and balances.
+
+> ⚠️ **Plaid is not free in production.** The sandbox environment is free and uses mock data.
+> The old Development environment was decommissioned in June 2024. For live bank connections,
+> a paid Plaid plan is required. The "200 free Limited Production calls" is a one-time trial only.
+
+### Setup
+
+1. Create a Plaid account at [dashboard.plaid.com](https://dashboard.plaid.com)
+2. Copy your `PLAID_CLIENT_ID` and `PLAID_SECRET` from the dashboard
+3. Register `http://localhost:8181` as an allowed redirect URI (required for OAuth banks like Chase)
+4. Set environment variables:
+   - `PLAID_CLIENT_ID` — your client ID
+   - `PLAID_SECRET` — your secret key
+   - `PLAID_ENV` — `sandbox` (default) or `production`
+   - `PLAID_LINK_PORT` — local server port (default: `8181`)
+
+### Connecting a Bank Account
+
+```
+budgetclaw_plaid_link
+```
+
+This opens Plaid Link in your browser. Sign in to your bank, then return to the terminal.
+The tool returns `{ connection_id, institution_name, accounts_found }`.
+
+For sandbox testing, use credentials: **user_good** / **pass_good**, select "First Platypus Bank".
+
+### Syncing Transactions
+
+After linking, use `budgetclaw_sync_connection` to pull transactions:
+
+| Step | Tool | Notes |
+|------|------|-------|
+| 1 | `budgetclaw_plaid_link` | One-time browser flow to connect bank |
+| 2 | `budgetclaw_sync_connection { id: connection_id }` | First sync — pulls all available transactions |
+| 3 | `budgetclaw_get_transactions` | View synced transactions |
+| 4 | `budgetclaw_sync_connection { id: connection_id }` | Subsequent syncs — only new/modified/removed |
+
+Subsequent syncs use cursor-based pagination — only new, modified, or removed transactions are
+fetched. No duplicates.
+
+### Viewing Balances
+
+After syncing, `budgetclaw_get_accounts` shows the latest balances pulled from Plaid.
+
+### OAuth Banks (Chase, BofA, Capital One, Wells Fargo, USAA)
+
+These institutions use OAuth redirect flows. Plaid handles this automatically — the only requirement
+is that `http://localhost:8181` is registered in your Plaid dashboard as a redirect URI.
+
+> Note: Getting Chase approved in Plaid Production can take **up to 6 weeks**. Sandbox works
+> immediately with test institutions.
+
+---
+
 ## Key Rules
 
 - Dates must be `YYYY-MM-DD`

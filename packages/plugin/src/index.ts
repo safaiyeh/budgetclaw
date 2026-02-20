@@ -26,6 +26,8 @@ import { importCsv, exportCsv } from './tools/import-export.js';
 import { readStatement, importTransactions } from './tools/statements.js';
 import { listConnections, removeConnection, syncConnection } from './tools/connections.js';
 import { defaultRegistry } from './providers/registry.js';
+import { PlaidDataProvider } from './providers/plaid.js';
+import { linkPlaid } from './tools/plaid-link.js';
 
 // ─── Local helpers ────────────────────────────────────────────────────────────
 
@@ -95,6 +97,9 @@ function tool(def: {
 
 export function register(api: OpenClawPluginApi, dbPath?: string): void {
   const db = getDb(dbPath);
+
+  // Register Plaid provider with the registry
+  defaultRegistry.register('plaid', (credential, meta) => new PlaidDataProvider(credential, meta));
 
   // ── Accounts ──────────────────────────────────────────────────────────────
 
@@ -502,6 +507,20 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
       required: ['id'],
     },
     execute: (p) => syncConnection(db, (p as {id:string}).id, defaultRegistry),
+  }));
+
+  // ── Plaid ─────────────────────────────────────────────────────────────────
+
+  api.registerTool(tool({
+    name: 'budgetclaw_plaid_link',
+    description: 'Connect a bank account via Plaid. Opens Plaid Link in your browser — sign in to your bank, then return here. Requires PLAID_CLIENT_ID and PLAID_SECRET env vars.',
+    parameters: {
+      type: 'object',
+      properties: {
+        institution_name: { type: 'string', description: 'Optional name hint (e.g. "Chase")' },
+      },
+    },
+    execute: (p) => linkPlaid(db, p as Parameters<typeof linkPlaid>[1]),
   }));
 }
 
