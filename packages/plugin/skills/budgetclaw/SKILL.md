@@ -216,7 +216,7 @@ Connect real bank accounts to automatically sync transactions and balances.
 
 1. Create a Plaid account at [dashboard.plaid.com](https://dashboard.plaid.com)
 2. Copy your `PLAID_CLIENT_ID` and `PLAID_SECRET` from the dashboard
-3. Register `http://localhost:8181` as an allowed redirect URI (required for OAuth banks like Chase)
+3. Register `https://localhost:8181` as an allowed redirect URI (required for OAuth banks like Chase)
 4. Set environment variables:
    - `PLAID_CLIENT_ID` — your client ID
    - `PLAID_SECRET` — your secret key
@@ -255,7 +255,11 @@ After syncing, `budgetclaw_get_accounts` shows the latest balances pulled from P
 ### OAuth Banks (Chase, BofA, Capital One, Wells Fargo, USAA)
 
 These institutions use OAuth redirect flows. Plaid handles this automatically — the only requirement
-is that `http://localhost:8181` is registered in your Plaid dashboard as a redirect URI.
+is that `https://localhost:8181` is registered in your Plaid dashboard as a redirect URI.
+
+On first use, the plugin automatically generates a localhost TLS certificate and trusts it via the
+macOS login keychain. Chrome and Safari will open `https://localhost:8181` without any warnings.
+Firefox users will see a one-time bypass prompt (click "Advanced" → "Accept the Risk and Continue").
 
 > Note: Getting Chase approved in Plaid Production can take **up to 6 weeks**. Sandbox works
 > immediately with test institutions.
