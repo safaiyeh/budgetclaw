@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+auth*.json
+auth-profiles.json
+*.key
+bun.lockb
+bun.lock
+.DS_Store
+coverage/
+.turbo/

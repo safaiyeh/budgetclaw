@@ -1,0 +1,7 @@
+[install]
+# Use Bun's built-in package manager
+frozenLockfile = false
+
+[test]
+# bun test configuration
+coverage = false
