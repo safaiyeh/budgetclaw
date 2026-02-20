@@ -11,15 +11,30 @@ A personal finance tracker plugin for [OpenClaw](https://github.com/openclaw/ope
 - **Net Worth** — snapshots and trend history
 - **Provider-agnostic** — pluggable `DataProvider` interface for future integrations
 
-## Requirements
-
-- [Bun](https://bun.sh) ≥ 1.0
-
 ## Installation
 
+### Ask OpenClaw to install it
+
+Copy and send this message to OpenClaw:
+
+```
+Please install the BudgetClaw plugin from npm:
+
+  npm package: @budgetclaw/plugin
+
+Install it as an OpenClaw plugin, then confirm the budgetclaw_* tools are available (e.g. budgetclaw_add_account, budgetclaw_get_transactions).
+```
+
+### Manual install
+
+**Requirements**: Node.js ≥ 22.5 and pnpm (or npm)
+
 ```bash
-# In your OpenClaw config, add the plugin
-bun add @budgetclaw/plugin
+# In your project, install the plugin
+npm install @budgetclaw/plugin
+
+# or with pnpm
+pnpm add @budgetclaw/plugin
 ```
 
 Then register it in your OpenClaw configuration:
@@ -36,16 +51,16 @@ export default {
 
 ```bash
 # Install dependencies
-bun install
-
-# Build the plugin
-bun run build
+pnpm install
 
 # Run tests
-bun test
+pnpm test
 
 # Type check
-bun run typecheck
+pnpm typecheck
+
+# Build
+pnpm build
 ```
 
 ## Data Storage
