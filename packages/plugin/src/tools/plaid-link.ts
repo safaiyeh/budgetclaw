@@ -1,5 +1,9 @@
-import { createServer } from 'node:http';
-import { exec } from 'node:child_process';
+import { createServer } from 'node:https';
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { exec, execFileSync } from 'node:child_process';
+import selfsigned from 'selfsigned';
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 import type { Database } from '../db/index.js';
 import { setCredential } from '../credentials/keychain.js';
@@ -119,6 +123,56 @@ function buildLinkHtml(linkToken: string, isCallback: boolean): string {
 </html>`;
 }
 
+function getTlsCert(): { key: string; cert: string } {
+  const dir = join(homedir(), '.budgetclaw', 'tls');
+  const keyPath = join(dir, 'key.pem');
+  const certPath = join(dir, 'cert.pem');
+
+  // Reuse existing cert if already generated
+  if (existsSync(keyPath) && existsSync(certPath)) {
+    return { key: readFileSync(keyPath, 'utf8'), cert: readFileSync(certPath, 'utf8') };
+  }
+
+  // Generate self-signed cert for localhost
+  const pems = selfsigned.generate(
+    [{ name: 'commonName', value: 'localhost' }],
+    {
+      days: 825,
+      algorithm: 'sha256',
+      extensions: [{
+        name: 'subjectAltName',
+        altNames: [
+          { type: 2, value: 'localhost' },
+          { type: 7, ip: '127.0.0.1' },
+        ],
+      }],
+    }
+  );
+
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(keyPath, pems.private, { mode: 0o600 });
+  writeFileSync(certPath, pems.cert, { mode: 0o644 });
+
+  // Trust the cert via macOS login keychain (no sudo required)
+  // Chrome and Safari use the login keychain; one-time operation per cert
+  if (process.platform === 'darwin') {
+    try {
+      const loginKeychain = join(homedir(), 'Library', 'Keychains', 'login.keychain-db');
+      execFileSync('security', [
+        'add-trusted-cert',
+        '-d',
+        '-r', 'trustRoot',
+        '-k', loginKeychain,
+        certPath,
+      ]);
+    } catch {
+      // Non-fatal — cert will still work, browser may show a warning
+    }
+  }
+
+  return { key: pems.private, cert: pems.cert };
+}
+
 export interface LinkPlaidInput {
   institution_name?: string;
 }
@@ -132,7 +186,7 @@ export interface LinkPlaidResult {
 export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<LinkPlaidResult> {
   const client = getPlaidClient();
   const port = parseInt(process.env['PLAID_LINK_PORT'] ?? '8181', 10);
-  const redirectUri = `http://localhost:${port}/callback`;
+  const redirectUri = `https://localhost:${port}/callback`;
 
   // 1. Create link token
   const linkTokenResponse = await client.linkTokenCreate({
@@ -155,7 +209,8 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
       reject(new Error('Plaid Link timed out after 10 minutes. Run budgetclaw_plaid_link again.'));
     }, TIMEOUT_MS);
 
-    const server = createServer((req, res) => {
+    const { key, cert } = getTlsCert();
+    const server = createServer({ key, cert }, (req, res) => {
       const url = req.url ?? '/';
 
       // Serve the Plaid Link page
@@ -195,9 +250,10 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
     });
 
     server.listen(port, '127.0.0.1', () => {
-      const url = `http://localhost:${port}/`;
+      const url = `https://localhost:${port}/`;
       console.log(`\nOpening Plaid Link at ${url}`);
-      console.log('Sign in to your bank, then return to this terminal.\n');
+      console.log('Sign in to your bank, then return to this terminal.');
+      console.log('(If your browser warns about the certificate, click Advanced → Proceed — this is expected on first use.)\n');
       openBrowser(url);
     });
 
