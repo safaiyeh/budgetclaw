@@ -1,5 +1,5 @@
 {
-  "name": "@budgetclaw/plugin",
+  "name": "@budgetclaw/budgetclaw",
   "version": "0.1.0",
   "description": "Personal finance tracker plugin for OpenClaw — SQLite-backed, provider-agnostic",
   "license": "MIT",

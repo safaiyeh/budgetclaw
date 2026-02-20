@@ -1,5 +1,5 @@
 /**
- * @budgetclaw/plugin — OpenClaw plugin entry point.
+ * @budgetclaw/budgetclaw — OpenClaw plugin entry point.
  *
  * Call `register(api)` to wire up all BudgetClaw agent tools.
  * The plugin opens (or creates) the SQLite database at ~/.budgetclaw/budget.db

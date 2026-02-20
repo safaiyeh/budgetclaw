@@ -2,9 +2,9 @@
   "name": "budgetclaw",
   "private": true,
   "scripts": {
-    "build": "pnpm --filter @budgetclaw/plugin build",
-    "test": "pnpm --filter @budgetclaw/plugin test",
-    "typecheck": "pnpm --filter @budgetclaw/plugin typecheck",
-    "lint": "pnpm --filter @budgetclaw/plugin lint"
+    "build": "pnpm --filter @budgetclaw/budgetclaw build",
+    "test": "pnpm --filter @budgetclaw/budgetclaw test",
+    "typecheck": "pnpm --filter @budgetclaw/budgetclaw typecheck",
+    "lint": "pnpm --filter @budgetclaw/budgetclaw lint"
   }
 }
