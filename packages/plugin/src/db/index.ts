@@ -1,8 +1,10 @@
-import { Database } from 'bun:sqlite';
+import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, chmodSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { runMigrations } from './migrations.js';
+
+export type Database = DatabaseSync;
 
 const DEFAULT_DIR = join(homedir(), '.budgetclaw');
 const DEFAULT_DB_PATH = join(DEFAULT_DIR, 'budget.db');
@@ -32,9 +34,9 @@ export function getDb(dbPath?: string): Database {
     }
   }
 
-  const db = new Database(resolvedPath);
-  db.run('PRAGMA journal_mode = WAL');
-  db.run('PRAGMA synchronous = NORMAL');
+  const db = new DatabaseSync(resolvedPath);
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA synchronous = NORMAL');
 
   if (!isMemory) {
     // Enforce file permissions: 600
@@ -59,5 +61,3 @@ export function resetDb(): void {
     _db = null;
   }
 }
-
-export type { Database };

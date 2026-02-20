@@ -1,4 +1,4 @@
-import type { Database } from 'bun:sqlite';
+import type { Database } from './index.js';
 import { BUILTIN_CATEGORIES } from '../categories/taxonomy.js';
 
 /**
@@ -7,7 +7,7 @@ import { BUILTIN_CATEGORIES } from '../categories/taxonomy.js';
  */
 const MIGRATIONS: Record<number, (db: Database) => void> = {
   1: (db) => {
-    db.run(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS accounts (
         id           TEXT PRIMARY KEY,
         name         TEXT NOT NULL,
@@ -23,7 +23,7 @@ const MIGRATIONS: Record<number, (db: Database) => void> = {
       )
     `);
 
-    db.run(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS transactions (
         id           TEXT PRIMARY KEY,
         account_id   TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -45,11 +45,11 @@ const MIGRATIONS: Record<number, (db: Database) => void> = {
       )
     `);
 
-    db.run(`CREATE INDEX IF NOT EXISTS idx_tx_date     ON transactions(date)`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_tx_account  ON transactions(account_id)`);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_tx_date     ON transactions(date)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_tx_account  ON transactions(account_id)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_tx_category ON transactions(category)`);
 
-    db.run(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS categories (
         id         TEXT PRIMARY KEY,
         name       TEXT NOT NULL UNIQUE,
@@ -59,7 +59,7 @@ const MIGRATIONS: Record<number, (db: Database) => void> = {
       )
     `);
 
-    db.run(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS budgets (
         id         TEXT PRIMARY KEY,
         category   TEXT NOT NULL,
@@ -71,7 +71,7 @@ const MIGRATIONS: Record<number, (db: Database) => void> = {
       )
     `);
 
-    db.run(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS portfolio_holdings (
         id           TEXT PRIMARY KEY,
         account_id   TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
@@ -90,7 +90,7 @@ const MIGRATIONS: Record<number, (db: Database) => void> = {
       )
     `);
 
-    db.run(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS net_worth_snapshots (
         id                TEXT PRIMARY KEY,
         date              TEXT NOT NULL,
@@ -102,9 +102,9 @@ const MIGRATIONS: Record<number, (db: Database) => void> = {
         created_at        TEXT NOT NULL
       )
     `);
-    db.run(`CREATE INDEX IF NOT EXISTS idx_nw_date ON net_worth_snapshots(date)`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_nw_date ON net_worth_snapshots(date)`);
 
-    db.run(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS provider_connections (
         id               TEXT PRIMARY KEY,
         provider         TEXT NOT NULL,
@@ -135,10 +135,11 @@ export const LATEST_VERSION = Math.max(...Object.keys(MIGRATIONS).map(Number));
 
 export function runMigrations(db: Database): void {
   // Enable foreign keys
-  db.run('PRAGMA foreign_keys = ON');
+  db.exec('PRAGMA foreign_keys = ON');
 
-  const currentVersion = (db.query('PRAGMA user_version').get() as { user_version: number })
-    .user_version;
+  const currentVersion = (
+    db.prepare('PRAGMA user_version').get() as { user_version: number }
+  ).user_version;
 
   if (currentVersion >= LATEST_VERSION) {
     return;
@@ -148,9 +149,14 @@ export function runMigrations(db: Database): void {
     const migration = MIGRATIONS[v];
     if (!migration) continue;
 
-    db.transaction(() => {
+    db.exec('BEGIN');
+    try {
       migration(db);
-      db.run(`PRAGMA user_version = ${v}`);
-    })();
+      db.exec(`PRAGMA user_version = ${v}`);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
   }
 }

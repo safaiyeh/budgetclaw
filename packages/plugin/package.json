@@ -17,10 +17,10 @@
     "skills"
   ],
   "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target bun --format esm --external bun:sqlite --external keytar --external yahoo-finance2 --external papaparse",
+    "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "test:watch": "bun test --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
@@ -32,14 +32,15 @@
     "openclaw": "^2026.2.19-2"
   },
   "devDependencies": {
-    "@types/bun": "latest",
+    "@types/node": "^22.0.0",
     "@types/papaparse": "^5.3.14",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
   },
   "openclaw": {
     "extensions": ["./src/index.ts"]
   },
   "engines": {
-    "bun": ">=1.0.0"
+    "node": ">=22.5.0"
   }
 }

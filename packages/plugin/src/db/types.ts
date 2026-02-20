@@ -89,3 +89,12 @@ export interface ProviderConnectionRow {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * Cast a node:sqlite row result to a typed row interface.
+ * node:sqlite returns Record<string, SqliteValue> at runtime; this bridges
+ * that dynamically-typed boundary to our static TypeScript interfaces.
+ */
+export function toRow<T>(row: unknown): T {
+  return row as T;
+}

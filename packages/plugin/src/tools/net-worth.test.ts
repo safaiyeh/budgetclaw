@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getDb, resetDb } from '../db/index.js';
 import { addAccount, updateAccountBalance } from './accounts.js';
 import { upsertHolding } from './portfolio.js';
