@@ -42,7 +42,7 @@ Then point OpenClaw at the built plugin (`packages/plugin/dist/index.js`) or
 register it in your OpenClaw configuration:
 
 ```typescript
-import budgetclaw from '@budgetclaw/plugin';
+import budgetclaw from '@budgetclaw/budgetclaw';
 
 export default {
   plugins: [budgetclaw],
