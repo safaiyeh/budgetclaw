@@ -18,26 +18,28 @@ A personal finance tracker plugin for [OpenClaw](https://github.com/openclaw/ope
 Copy and send this message to OpenClaw:
 
 ```
-Please install the BudgetClaw plugin from npm:
+Please install the BudgetClaw plugin from GitHub:
 
-  npm package: @budgetclaw/plugin
+  https://github.com/safaiyeh/budgetclaw
 
-Install it as an OpenClaw plugin, then confirm the budgetclaw_* tools are available (e.g. budgetclaw_add_account, budgetclaw_get_transactions).
+Clone the repo, run `pnpm install` and `pnpm build` inside `packages/plugin`,
+then register it as an OpenClaw plugin and confirm the budgetclaw_* tools are
+available (e.g. budgetclaw_add_account, budgetclaw_get_transactions).
 ```
 
 ### Manual install
 
-**Requirements**: Node.js ≥ 22.5 and pnpm (or npm)
+**Requirements**: Node.js ≥ 22.5 and pnpm
 
 ```bash
-# In your project, install the plugin
-npm install @budgetclaw/plugin
-
-# or with pnpm
-pnpm add @budgetclaw/plugin
+git clone https://github.com/safaiyeh/budgetclaw
+cd budgetclaw
+pnpm install
+pnpm build
 ```
 
-Then register it in your OpenClaw configuration:
+Then point OpenClaw at the built plugin (`packages/plugin/dist/index.js`) or
+register it in your OpenClaw configuration:
 
 ```typescript
 import budgetclaw from '@budgetclaw/plugin';
