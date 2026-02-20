@@ -257,9 +257,9 @@ After syncing, `budgetclaw_get_accounts` shows the latest balances pulled from P
 These institutions use OAuth redirect flows. Plaid handles this automatically — the only requirement
 is that `https://localhost:8181` is registered in your Plaid dashboard as a redirect URI.
 
-On first use, the plugin automatically generates a localhost TLS certificate and trusts it via the
-macOS login keychain. Chrome and Safari will open `https://localhost:8181` without any warnings.
-Firefox users will see a one-time bypass prompt (click "Advanced" → "Accept the Risk and Continue").
+On first use, the plugin automatically generates a self-signed localhost TLS certificate stored at
+`~/.budgetclaw/tls/`. Your browser will show a certificate warning — click **Advanced → Proceed**
+to continue. This is a one-time prompt per browser.
 
 > Note: Getting Chase approved in Plaid Production can take **up to 6 weeks**. Sandbox works
 > immediately with test institutions.

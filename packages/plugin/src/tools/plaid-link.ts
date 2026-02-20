@@ -2,7 +2,7 @@ import { createServer } from 'node:https';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { exec, execFileSync } from 'node:child_process';
+import { exec } from 'node:child_process';
 import selfsigned from 'selfsigned';
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 import type { Database } from '../db/index.js';
@@ -153,23 +153,6 @@ function getTlsCert(): { key: string; cert: string } {
   writeFileSync(keyPath, pems.private, { mode: 0o600 });
   writeFileSync(certPath, pems.cert, { mode: 0o644 });
 
-  // Trust the cert via macOS login keychain (no sudo required)
-  // Chrome and Safari use the login keychain; one-time operation per cert
-  if (process.platform === 'darwin') {
-    try {
-      const loginKeychain = join(homedir(), 'Library', 'Keychains', 'login.keychain-db');
-      execFileSync('security', [
-        'add-trusted-cert',
-        '-d',
-        '-r', 'trustRoot',
-        '-k', loginKeychain,
-        certPath,
-      ]);
-    } catch {
-      // Non-fatal — cert will still work, browser may show a warning
-    }
-  }
-
   return { key: pems.private, cert: pems.cert };
 }
 
@@ -253,7 +236,7 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
       const url = `https://localhost:${port}/`;
       console.log(`\nOpening Plaid Link at ${url}`);
       console.log('Sign in to your bank, then return to this terminal.');
-      console.log('(If your browser warns about the certificate, click Advanced → Proceed — this is expected on first use.)\n');
+      console.log('Note: your browser will warn about the self-signed certificate — click Advanced → Proceed to continue.\n');
       openBrowser(url);
     });
 
