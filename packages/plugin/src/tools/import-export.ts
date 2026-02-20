@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
-import type { Database } from 'bun:sqlite';
-import type { TransactionRow, AccountRow } from '../db/types.js';
+import type { Database } from '../db/index.js';
+import { toRow } from '../db/types.js';
+import type { AccountRow } from '../db/types.js';
 import { CsvDataProvider, type CsvImportOptions } from '../providers/csv.js';
 import Papa from 'papaparse';
 
@@ -25,13 +26,12 @@ export interface ExportCsvInput {
   to_date?: string;
 }
 
-// ─── Import ───────────────────────────────────────────────────────────────────
-
 export async function importCsv(db: Database, input: ImportCsvInput): Promise<ImportCsvResult> {
   const { file_path, account_id, mapping, date_format, invert_amounts } = input;
 
-  // Verify account exists
-  const account = db.query('SELECT * FROM accounts WHERE id = ?').get(account_id) as AccountRow | null;
+  const account = toRow<AccountRow | undefined>(
+    db.prepare('SELECT * FROM accounts WHERE id = ?').get(account_id)
+  );
   if (!account) {
     throw new Error(`Account "${account_id}" not found`);
   }
@@ -49,7 +49,6 @@ export async function importCsv(db: Database, input: ImportCsvInput): Promise<Im
   let imported = 0;
   let skipped = 0;
   const errors: string[] = [];
-
   const now = new Date().toISOString();
 
   const insertStmt = db.prepare(`
@@ -63,28 +62,12 @@ export async function importCsv(db: Database, input: ImportCsvInput): Promise<Im
     try {
       const id = crypto.randomUUID();
       const result = insertStmt.run(
-        id,
-        account_id,
-        tx.date,
-        tx.amount,
-        tx.currency ?? 'USD',
-        tx.description ?? null,
-        tx.merchant ?? null,
-        tx.category ?? null,
-        tx.subcategory ?? null,
-        tx.type ?? null,
-        tx.external_id,
-        tx.notes ?? null,
-        now,
-        now
+        id, account_id, tx.date, tx.amount, tx.currency ?? 'USD',
+        tx.description ?? null, tx.merchant ?? null, tx.category ?? null,
+        tx.subcategory ?? null, tx.type ?? null, tx.external_id,
+        tx.notes ?? null, now, now
       );
-
-      if (result.changes > 0) {
-        imported++;
-      } else {
-        // INSERT OR IGNORE means 0 changes = duplicate
-        skipped++;
-      }
+      if (result.changes > 0) { imported++; } else { skipped++; }
     } catch (err) {
       errors.push(`Row (external_id: ${tx.external_id}): ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -92,8 +75,6 @@ export async function importCsv(db: Database, input: ImportCsvInput): Promise<Im
 
   return { imported, skipped, errors };
 }
-
-// ─── Export ───────────────────────────────────────────────────────────────────
 
 export function exportCsv(db: Database, input: ExportCsvInput): { exported: number; file_path: string } {
   const { file_path, account_id, from_date, to_date } = input;
@@ -107,27 +88,16 @@ export function exportCsv(db: Database, input: ExportCsvInput): { exported: numb
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-  const rows = db.query(`
+  const rows = toRow<Record<string, unknown>[]>(db.prepare(`
     SELECT
-      t.id,
-      a.name AS account_name,
-      t.date,
-      t.amount,
-      t.currency,
-      t.description,
-      t.merchant,
-      t.category,
-      t.subcategory,
-      t.type,
-      t.source,
-      t.external_id,
-      t.pending,
-      t.notes
+      t.id, a.name AS account_name, t.date, t.amount, t.currency,
+      t.description, t.merchant, t.category, t.subcategory,
+      t.type, t.source, t.external_id, t.pending, t.notes
     FROM transactions t
     JOIN accounts a ON a.id = t.account_id
     ${where}
     ORDER BY t.date DESC, t.created_at DESC
-  `).all(...params) as Record<string, unknown>[];
+  `).all(...params));
 
   const csv = Papa.unparse(rows, { header: true });
   writeFileSync(file_path, csv, 'utf-8');

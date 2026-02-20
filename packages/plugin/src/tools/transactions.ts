@@ -1,4 +1,5 @@
-import type { Database } from 'bun:sqlite';
+import type { Database } from '../db/index.js';
+import { toRow } from '../db/types.js';
 import type { TransactionRow } from '../db/types.js';
 
 function uuid(): string {
@@ -8,8 +9,6 @@ function uuid(): string {
 function now(): string {
   return new Date().toISOString();
 }
-
-// ─── Input types ─────────────────────────────────────────────────────────────
 
 export interface AddTransactionInput {
   account_id: string;
@@ -60,8 +59,6 @@ export interface SpendingSummaryRow {
   count: number;
 }
 
-// ─── Handlers ────────────────────────────────────────────────────────────────
-
 export function addTransaction(db: Database, input: AddTransactionInput): TransactionRow {
   const {
     account_id,
@@ -79,12 +76,11 @@ export function addTransaction(db: Database, input: AddTransactionInput): Transa
     notes,
   } = input;
 
-  // Validate date format
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new Error(`Invalid date "${date}". Expected YYYY-MM-DD`);
   }
 
-  const account = db.query('SELECT id FROM accounts WHERE id = ?').get(account_id);
+  const account = db.prepare('SELECT id FROM accounts WHERE id = ?').get(account_id);
   if (!account) {
     throw new Error(`Account "${account_id}" not found`);
   }
@@ -92,19 +88,18 @@ export function addTransaction(db: Database, input: AddTransactionInput): Transa
   const id = uuid();
   const ts = now();
 
-  db.run(
+  db.prepare(
     `INSERT INTO transactions
      (id, account_id, date, amount, currency, description, merchant, category, subcategory,
       type, source, external_id, pending, notes, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id, account_id, date, amount, currency, description ?? null, merchant ?? null,
-      category ?? null, subcategory ?? null, type ?? null, source,
-      external_id ?? null, pending ? 1 : 0, notes ?? null, ts, ts,
-    ]
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id, account_id, date, amount, currency, description ?? null, merchant ?? null,
+    category ?? null, subcategory ?? null, type ?? null, source,
+    external_id ?? null, pending ? 1 : 0, notes ?? null, ts, ts,
   );
 
-  return db.query('SELECT * FROM transactions WHERE id = ?').get(id) as TransactionRow;
+  return toRow<TransactionRow>(db.prepare('SELECT * FROM transactions WHERE id = ?').get(id));
 }
 
 export function getTransactions(db: Database, input: GetTransactionsInput): TransactionRow[] {
@@ -113,22 +108,10 @@ export function getTransactions(db: Database, input: GetTransactionsInput): Tran
   const conditions: string[] = [];
   const params: (string | number)[] = [];
 
-  if (account_id) {
-    conditions.push('account_id = ?');
-    params.push(account_id);
-  }
-  if (category) {
-    conditions.push('category = ?');
-    params.push(category);
-  }
-  if (from_date) {
-    conditions.push('date >= ?');
-    params.push(from_date);
-  }
-  if (to_date) {
-    conditions.push('date <= ?');
-    params.push(to_date);
-  }
+  if (account_id) { conditions.push('account_id = ?'); params.push(account_id); }
+  if (category)   { conditions.push('category = ?');   params.push(category); }
+  if (from_date)  { conditions.push('date >= ?');       params.push(from_date); }
+  if (to_date)    { conditions.push('date <= ?');       params.push(to_date); }
   if (search) {
     conditions.push('(description LIKE ? OR merchant LIKE ? OR notes LIKE ?)');
     const like = `%${search}%`;
@@ -139,7 +122,7 @@ export function getTransactions(db: Database, input: GetTransactionsInput): Tran
   const sql = `SELECT * FROM transactions ${where} ORDER BY date DESC, created_at DESC LIMIT ? OFFSET ?`;
   params.push(limit, offset);
 
-  return db.query(sql).all(...params) as TransactionRow[];
+  return toRow<TransactionRow[]>(db.prepare(sql).all(...params));
 }
 
 export function updateTransaction(db: Database, input: UpdateTransactionInput): TransactionRow {
@@ -164,20 +147,19 @@ export function updateTransaction(db: Database, input: UpdateTransactionInput): 
   setClauses.push('updated_at = ?');
   params.push(ts, id);
 
-  const result = db.run(
-    `UPDATE transactions SET ${setClauses.join(', ')} WHERE id = ?`,
-    params
-  );
+  const result = db.prepare(
+    `UPDATE transactions SET ${setClauses.join(', ')} WHERE id = ?`
+  ).run(...params);
 
   if (result.changes === 0) {
     throw new Error(`Transaction "${id}" not found`);
   }
 
-  return db.query('SELECT * FROM transactions WHERE id = ?').get(id) as TransactionRow;
+  return toRow<TransactionRow>(db.prepare('SELECT * FROM transactions WHERE id = ?').get(id));
 }
 
 export function deleteTransaction(db: Database, id: string): { deleted: boolean } {
-  const result = db.run('DELETE FROM transactions WHERE id = ?', [id]);
+  const result = db.prepare('DELETE FROM transactions WHERE id = ?').run(id);
   return { deleted: result.changes > 0 };
 }
 
@@ -187,22 +169,18 @@ export function getSpendingSummary(db: Database, input: SpendingSummaryInput): S
   const conditions = ['date >= ?', 'date <= ?', 'amount < 0'];
   const params: (string | number)[] = [from_date, to_date];
 
-  if (account_id) {
-    conditions.push('account_id = ?');
-    params.push(account_id);
-  }
+  if (account_id) { conditions.push('account_id = ?'); params.push(account_id); }
 
-  const where = `WHERE ${conditions.join(' AND ')}`;
   const sql = `
     SELECT
       COALESCE(category, 'Uncategorized') AS category,
       ROUND(ABS(SUM(amount)), 2)          AS total,
       COUNT(*)                            AS count
     FROM transactions
-    ${where}
+    WHERE ${conditions.join(' AND ')}
     GROUP BY category
     ORDER BY total DESC
   `;
 
-  return db.query(sql).all(...params) as SpendingSummaryRow[];
+  return toRow<SpendingSummaryRow[]>(db.prepare(sql).all(...params));
 }

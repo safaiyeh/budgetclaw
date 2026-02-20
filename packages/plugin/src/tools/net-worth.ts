@@ -1,4 +1,5 @@
-import type { Database } from 'bun:sqlite';
+import type { Database } from '../db/index.js';
+import { toRow } from '../db/types.js';
 import type { NetWorthSnapshotRow, AccountRow } from '../db/types.js';
 
 function uuid(): string {
@@ -23,16 +24,10 @@ export interface NetWorthResult extends NetWorthSnapshotRow {
   breakdown_parsed: Record<string, number>;
 }
 
-// ─── Handlers ────────────────────────────────────────────────────────────────
-
-/**
- * Calculate current net worth from account balances + portfolio holdings,
- * then save a snapshot.
- */
 export function snapshotNetWorth(db: Database, input: SnapshotNetWorthInput = {}): NetWorthResult {
-  const accounts = db
-    .query('SELECT * FROM accounts WHERE is_active = 1')
-    .all() as AccountRow[];
+  const accounts = toRow<AccountRow[]>(
+    db.prepare('SELECT * FROM accounts WHERE is_active = 1').all()
+  );
 
   const breakdown: Record<string, number> = {};
   let totalAssets = 0;
@@ -41,11 +36,10 @@ export function snapshotNetWorth(db: Database, input: SnapshotNetWorthInput = {}
   for (const account of accounts) {
     let balance = account.balance ?? 0;
 
-    // For investment/crypto accounts, use portfolio value if available
     if (account.type === 'investment' || account.type === 'crypto') {
-      const portfolioValue = db
-        .query('SELECT SUM(value) AS total FROM portfolio_holdings WHERE account_id = ?')
-        .get(account.id) as { total: number | null };
+      const portfolioValue = toRow<{ total: number | null }>(
+        db.prepare('SELECT SUM(value) AS total FROM portfolio_holdings WHERE account_id = ?').get(account.id)
+      );
       if (portfolioValue.total !== null) {
         balance = portfolioValue.total;
       }
@@ -66,29 +60,25 @@ export function snapshotNetWorth(db: Database, input: SnapshotNetWorthInput = {}
   const id = uuid();
   const ts = now();
 
-  db.run(
+  db.prepare(
     `INSERT INTO net_worth_snapshots (id, date, total_assets, total_liabilities, net_worth, breakdown, notes, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      dateStr,
-      Math.round(totalAssets * 100) / 100,
-      Math.round(totalLiabilities * 100) / 100,
-      Math.round(netWorth * 100) / 100,
-      JSON.stringify(breakdown),
-      input.notes ?? null,
-      ts,
-    ]
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    dateStr,
+    Math.round(totalAssets * 100) / 100,
+    Math.round(totalLiabilities * 100) / 100,
+    Math.round(netWorth * 100) / 100,
+    JSON.stringify(breakdown),
+    input.notes ?? null,
+    ts,
   );
 
-  const row = db
-    .query('SELECT * FROM net_worth_snapshots WHERE id = ?')
-    .get(id) as NetWorthSnapshotRow;
+  const row = toRow<NetWorthSnapshotRow>(
+    db.prepare('SELECT * FROM net_worth_snapshots WHERE id = ?').get(id)
+  );
 
-  return {
-    ...row,
-    breakdown_parsed: breakdown,
-  };
+  return { ...row, breakdown_parsed: breakdown };
 }
 
 export function getNetWorthHistory(
@@ -107,7 +97,7 @@ export function getNetWorthHistory(
   const sql = `SELECT * FROM net_worth_snapshots ${where} ORDER BY date DESC LIMIT ?`;
   params.push(limit);
 
-  const rows = db.query(sql).all(...params) as NetWorthSnapshotRow[];
+  const rows = toRow<NetWorthSnapshotRow[]>(db.prepare(sql).all(...params));
 
   return rows.map((row) => ({
     ...row,

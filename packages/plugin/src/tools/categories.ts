@@ -1,4 +1,5 @@
-import type { Database } from 'bun:sqlite';
+import type { Database } from '../db/index.js';
+import { toRow } from '../db/types.js';
 import type { CategoryRow } from '../db/types.js';
 
 function uuid(): string {
@@ -15,21 +16,21 @@ export interface AddCategoryInput {
 }
 
 export function getCategories(db: Database): CategoryRow[] {
-  return db
-    .query('SELECT * FROM categories ORDER BY parent NULLS FIRST, name')
-    .all() as CategoryRow[];
+  return toRow<CategoryRow[]>(
+    db.prepare('SELECT * FROM categories ORDER BY parent NULLS FIRST, name').all()
+  );
 }
 
 export function addCategory(db: Database, input: AddCategoryInput): CategoryRow {
   const { name, parent } = input;
 
-  const existing = db.query('SELECT id FROM categories WHERE name = ?').get(name);
+  const existing = db.prepare('SELECT id FROM categories WHERE name = ?').get(name);
   if (existing) {
     throw new Error(`Category "${name}" already exists`);
   }
 
   if (parent) {
-    const parentRow = db.query('SELECT id FROM categories WHERE name = ?').get(parent);
+    const parentRow = db.prepare('SELECT id FROM categories WHERE name = ?').get(parent);
     if (!parentRow) {
       throw new Error(`Parent category "${parent}" not found`);
     }
@@ -38,18 +39,17 @@ export function addCategory(db: Database, input: AddCategoryInput): CategoryRow 
   const id = uuid();
   const ts = now();
 
-  db.run(
-    'INSERT INTO categories (id, name, parent, is_builtin, created_at) VALUES (?, ?, ?, 0, ?)',
-    [id, name, parent ?? null, ts]
-  );
+  db.prepare(
+    'INSERT INTO categories (id, name, parent, is_builtin, created_at) VALUES (?, ?, ?, 0, ?)'
+  ).run(id, name, parent ?? null, ts);
 
-  return db.query('SELECT * FROM categories WHERE id = ?').get(id) as CategoryRow;
+  return toRow<CategoryRow>(db.prepare('SELECT * FROM categories WHERE id = ?').get(id));
 }
 
 export function deleteCategory(db: Database, id: string): { deleted: boolean } {
-  const row = db.query('SELECT is_builtin FROM categories WHERE id = ?').get(id) as
-    | { is_builtin: number }
-    | null;
+  const row = toRow<{ is_builtin: number } | undefined>(
+    db.prepare('SELECT is_builtin FROM categories WHERE id = ?').get(id)
+  );
 
   if (!row) {
     throw new Error(`Category "${id}" not found`);
@@ -58,6 +58,6 @@ export function deleteCategory(db: Database, id: string): { deleted: boolean } {
     throw new Error('Built-in categories cannot be deleted');
   }
 
-  const result = db.run('DELETE FROM categories WHERE id = ? AND is_builtin = 0', [id]);
+  const result = db.prepare('DELETE FROM categories WHERE id = ? AND is_builtin = 0').run(id);
   return { deleted: result.changes > 0 };
 }

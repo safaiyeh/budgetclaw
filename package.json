@@ -1,13 +1,10 @@
 {
   "name": "budgetclaw",
   "private": true,
-  "workspaces": [
-    "packages/*"
-  ],
   "scripts": {
-    "build": "bun run --filter '@budgetclaw/plugin' build",
-    "test": "bun test",
-    "typecheck": "bun run --filter '@budgetclaw/plugin' typecheck",
-    "lint": "bun run --filter '@budgetclaw/plugin' lint"
+    "build": "pnpm --filter @budgetclaw/plugin build",
+    "test": "pnpm --filter @budgetclaw/plugin test",
+    "typecheck": "pnpm --filter @budgetclaw/plugin typecheck",
+    "lint": "pnpm --filter @budgetclaw/plugin lint"
   }
 }

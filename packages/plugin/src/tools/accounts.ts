@@ -1,4 +1,5 @@
-import type { Database } from 'bun:sqlite';
+import type { Database } from '../db/index.js';
+import { toRow } from '../db/types.js';
 import type { AccountRow } from '../db/types.js';
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'investment', 'crypto', 'loan', 'other'] as const;
@@ -11,8 +12,6 @@ function uuid(): string {
 function now(): string {
   return new Date().toISOString();
 }
-
-// ─── Tool handler types ───────────────────────────────────────────────────────
 
 export interface AddAccountInput {
   name: string;
@@ -29,8 +28,6 @@ export interface UpdateAccountBalanceInput {
   balance: number;
 }
 
-// ─── Handlers ────────────────────────────────────────────────────────────────
-
 export function addAccount(db: Database, input: AddAccountInput): AccountRow {
   const { name, type, institution, balance, currency = 'USD', source = 'manual', external_id } = input;
 
@@ -41,27 +38,26 @@ export function addAccount(db: Database, input: AddAccountInput): AccountRow {
   const id = uuid();
   const ts = now();
 
-  db.run(
+  db.prepare(
     `INSERT INTO accounts (id, name, institution, type, currency, balance, source, external_id, is_active, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
-    [id, name, institution ?? null, type, currency, balance ?? null, source, external_id ?? null, ts, ts]
-  );
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+  ).run(id, name, institution ?? null, type, currency, balance ?? null, source, external_id ?? null, ts, ts);
 
-  return db.query('SELECT * FROM accounts WHERE id = ?').get(id) as AccountRow;
+  return toRow<AccountRow>(db.prepare('SELECT * FROM accounts WHERE id = ?').get(id));
 }
 
 export function getAccounts(db: Database): AccountRow[] {
-  return db.query('SELECT * FROM accounts WHERE is_active = 1 ORDER BY name').all() as AccountRow[];
+  return toRow<AccountRow[]>(db.prepare('SELECT * FROM accounts WHERE is_active = 1 ORDER BY name').all());
 }
 
 export function updateAccountBalance(db: Database, input: UpdateAccountBalanceInput): AccountRow {
   const { id, balance } = input;
   const ts = now();
 
-  const result = db.run('UPDATE accounts SET balance = ?, updated_at = ? WHERE id = ?', [balance, ts, id]);
+  const result = db.prepare('UPDATE accounts SET balance = ?, updated_at = ? WHERE id = ?').run(balance, ts, id);
   if (result.changes === 0) {
     throw new Error(`Account "${id}" not found`);
   }
 
-  return db.query('SELECT * FROM accounts WHERE id = ?').get(id) as AccountRow;
+  return toRow<AccountRow>(db.prepare('SELECT * FROM accounts WHERE id = ?').get(id));
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { getDb, resetDb } from './index.js';
 
 describe('Database', () => {
@@ -24,7 +24,7 @@ describe('Database', () => {
   it('runs migrations and creates all tables', () => {
     const db = getDb(':memory:');
     const tables = db
-      .query(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
+      .prepare(`SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`)
       .all() as { name: string }[];
     const tableNames = tables.map((t) => t.name);
 
@@ -39,14 +39,14 @@ describe('Database', () => {
 
   it('sets PRAGMA user_version = 1 after migration', () => {
     const db = getDb(':memory:');
-    const result = db.query('PRAGMA user_version').get() as { user_version: number };
-    expect(result.user_version).toBe(1);
+    const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
+    expect(row.user_version).toBe(1);
   });
 
   it('seeds built-in categories', () => {
     const db = getDb(':memory:');
     const count = db
-      .query('SELECT COUNT(*) AS cnt FROM categories WHERE is_builtin = 1')
+      .prepare('SELECT COUNT(*) AS cnt FROM categories WHERE is_builtin = 1')
       .get() as { cnt: number };
     expect(count.cnt).toBeGreaterThan(0);
   });
