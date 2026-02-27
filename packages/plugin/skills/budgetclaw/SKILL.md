@@ -247,10 +247,6 @@ After syncing, `budgetclaw_get_accounts` shows the latest balances pulled from P
 
 Plaid access tokens are stored in an encrypted file at `~/.budgetclaw/credentials.json.enc` (AES-256-GCM).
 
-Optional environment variables:
-- `BUDGETCLAW_CREDENTIAL_KEY` — custom encryption passphrase (recommended for remote/shared setups)
-- `BUDGETCLAW_CREDENTIAL_BACKEND=keytar` — opt-in to OS keychain via keytar instead of the file store
-
 ---
 
 ## Key Rules
