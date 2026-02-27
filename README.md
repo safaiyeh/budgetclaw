@@ -13,21 +13,11 @@ A personal finance tracker plugin for [OpenClaw](https://github.com/openclaw/ope
 
 ## Installation
 
-### Ask OpenClaw to install it
-
-Copy and send this message to OpenClaw:
-
 ```
-Please install the BudgetClaw plugin from GitHub:
-
-  https://github.com/safaiyeh/budgetclaw
-
-Clone the repo, run `pnpm install` and `pnpm build` inside `packages/plugin`,
-then register it as an OpenClaw plugin and confirm the budgetclaw_* tools are
-available (e.g. budgetclaw_add_account, budgetclaw_get_transactions).
+openclaw plugins install @budgetclaw/budgetclaw
 ```
 
-### Manual install
+### Development
 
 **Requirements**: Node.js ≥ 22.5 and pnpm
 
@@ -36,33 +26,7 @@ git clone https://github.com/safaiyeh/budgetclaw
 cd budgetclaw
 pnpm install
 pnpm build
-```
-
-Then point OpenClaw at the built plugin (`packages/plugin/dist/index.js`) or
-register it in your OpenClaw configuration:
-
-```typescript
-import budgetclaw from '@budgetclaw/budgetclaw';
-
-export default {
-  plugins: [budgetclaw],
-};
-```
-
-## Development
-
-```bash
-# Install dependencies
-pnpm install
-
-# Run tests
 pnpm test
-
-# Type check
-pnpm typecheck
-
-# Build
-pnpm build
 ```
 
 ## Data Storage
@@ -71,7 +35,7 @@ All financial data is stored locally at `~/.budgetclaw/budget.db` (SQLite).
 
 - Directory: `~/.budgetclaw/` (permissions: `700`)
 - Database: `~/.budgetclaw/budget.db` (permissions: `600`)
-- Provider credentials (if any): stored in OS keychain via `keytar` — never written to disk by the plugin
+- Provider credentials (if any): stored in an encrypted file at `~/.budgetclaw/credentials.enc`
 
 ## Tools
 

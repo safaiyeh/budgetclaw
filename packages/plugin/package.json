@@ -14,14 +14,16 @@
   },
   "files": [
     "dist",
-    "skills"
+    "skills",
+    "openclaw.plugin.json"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "papaparse": "^5.4.1",
@@ -42,7 +44,7 @@
     "vitest": "^3.0.0"
   },
   "openclaw": {
-    "extensions": ["./src/index.ts"]
+    "extensions": ["./dist/index.js"]
   },
   "engines": {
     "node": ">=22.5.0"

@@ -1,0 +1,14 @@
+{
+  "id": "budgetclaw",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "PLAID_CLIENT_ID": { "type": "string" },
+      "PLAID_SECRET": { "type": "string" }
+    }
+  },
+  "uiHints": {
+    "PLAID_CLIENT_ID": { "label": "Plaid Client ID", "sensitive": true },
+    "PLAID_SECRET": { "label": "Plaid Secret", "sensitive": true }
+  }
+}
