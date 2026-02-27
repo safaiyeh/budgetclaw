@@ -14,20 +14,11 @@ export class PlaidDataProvider implements DataProvider {
   private getClient(): PlaidApi {
     const clientId = process.env['PLAID_CLIENT_ID'];
     const secret = process.env['PLAID_SECRET'];
-    const envName = (process.env['PLAID_ENV'] ?? 'sandbox') as keyof typeof PlaidEnvironments;
-
     if (!clientId) throw new Error('Missing env var: PLAID_CLIENT_ID');
     if (!secret) throw new Error('Missing env var: PLAID_SECRET');
 
-    const baseURL = PlaidEnvironments[envName];
-    if (!baseURL) {
-      throw new Error(
-        `Invalid PLAID_ENV "${envName}". Valid values: ${Object.keys(PlaidEnvironments).join(', ')}`,
-      );
-    }
-
     const config = new Configuration({
-      basePath: baseURL,
+      basePath: PlaidEnvironments['production'],
       baseOptions: {
         headers: {
           'PLAID-CLIENT-ID': clientId,
