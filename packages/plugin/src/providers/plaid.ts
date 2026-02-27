@@ -112,7 +112,9 @@ export class PlaidDataProvider implements DataProvider {
 
   async getBalances(): Promise<RawBalance[]> {
     const client = getPlaidClient();
-    const response = await client.accountsBalanceGet({ access_token: this.accessToken });
+    // Use accountsGet (included with transactions) instead of accountsBalanceGet
+    // (which requires the separate balance product)
+    const response = await client.accountsGet({ access_token: this.accessToken });
 
     return response.data.accounts.map((a) => ({
       account_external_id: a.account_id,
