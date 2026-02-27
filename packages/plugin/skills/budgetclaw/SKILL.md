@@ -221,20 +221,23 @@ Connect real bank accounts to automatically sync transactions and balances.
 
 ### Connecting a Bank Account
 
-Run `budgetclaw_plaid_link` — it returns a Plaid-hosted URL. **Send that URL to the user** (it works on any device — phone, tablet, desktop). The user taps the link, signs in to their bank, and the tool automatically detects completion via polling.
+This is a two-step flow:
 
-No local server, no certificates, no browser required on the machine running BudgetClaw.
+1. Call `budgetclaw_plaid_link` — returns a `link_url` and `link_token` immediately.
+2. **Send the `link_url` to the user** and tell them to let you know when they're done.
+3. **Wait for the user to confirm** they finished linking. Do NOT call the complete tool until the user says they're done.
+4. Call `budgetclaw_plaid_link_complete { link_token }` — confirms completion with Plaid, then automatically syncs accounts, transactions, and holdings.
+
+If `budgetclaw_plaid_link_complete` returns `{status:"waiting"}`, Plaid hasn't received the completion yet — ask the user to try again or wait a moment, then retry.
 
 ### Syncing Transactions
 
-After linking, use `budgetclaw_sync_connection` to pull transactions:
+The first sync happens automatically when Plaid Link completes. For subsequent syncs:
 
 | Step | Tool | Notes |
 |------|------|-------|
-| 1 | `budgetclaw_plaid_link` | One-time — tap the link, sign in, done |
-| 2 | `budgetclaw_sync_connection { id: connection_id }` | First sync — pulls all available transactions |
-| 3 | `budgetclaw_get_transactions` | View synced transactions |
-| 4 | `budgetclaw_sync_connection { id: connection_id }` | Subsequent syncs — only new/modified/removed |
+| 1 | `budgetclaw_sync_connection { id: connection_id }` | Pull new/modified/removed transactions |
+| 2 | `budgetclaw_get_transactions` | View synced transactions |
 
 Subsequent syncs use cursor-based pagination — only new, modified, or removed transactions are
 fetched. No duplicates.
