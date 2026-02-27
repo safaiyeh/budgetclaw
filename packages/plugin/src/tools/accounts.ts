@@ -2,7 +2,7 @@ import type { Database } from '../db/index.js';
 import { toRow } from '../db/types.js';
 import type { AccountRow, ProviderConnectionRow } from '../db/types.js';
 import { getCredential, deleteCredential } from '../credentials/keychain.js';
-import { getPlaidClient } from '../providers/plaid-client.js';
+import type { ProviderRegistry } from '../providers/registry.js';
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'investment', 'crypto', 'loan', 'other'] as const;
 type AccountType = (typeof ACCOUNT_TYPES)[number];
@@ -34,7 +34,7 @@ export interface DeleteAccountResult {
   deleted_accounts: number;
   deleted_transactions: number;
   deleted_holdings: number;
-  plaid_connection_removed: boolean;
+  connection_removed: boolean;
 }
 
 export function addAccount(db: Database, input: AddAccountInput): AccountRow {
@@ -59,7 +59,11 @@ export function getAccounts(db: Database): AccountRow[] {
   return toRow<AccountRow[]>(db.prepare('SELECT * FROM accounts WHERE is_active = 1 ORDER BY name').all());
 }
 
-export async function deleteAccount(db: Database, input: { id: string }): Promise<DeleteAccountResult> {
+export async function deleteAccount(
+  db: Database,
+  input: { id: string },
+  registry: ProviderRegistry,
+): Promise<DeleteAccountResult> {
   const account = toRow<AccountRow | undefined>(
     db.prepare('SELECT * FROM accounts WHERE id = ?').get(input.id)
   );
@@ -68,29 +72,33 @@ export async function deleteAccount(db: Database, input: { id: string }): Promis
   let totalTx = 0;
   let totalHoldings = 0;
   let deletedAccounts = 0;
-  let plaidConnectionRemoved = false;
+  let connectionRemoved = false;
 
-  if (account.source === 'plaid') {
-    // Find the Plaid connection by matching institution_name
+  // If the account belongs to a provider connection, remove the entire connection
+  if (account.connection_id) {
     const conn = toRow<ProviderConnectionRow | undefined>(
-      db.prepare(
-        'SELECT * FROM provider_connections WHERE provider = ? AND institution_name = ?'
-      ).get('plaid', account.institution)
+      db.prepare('SELECT * FROM provider_connections WHERE id = ?').get(account.connection_id)
     );
 
     if (conn) {
-      // 1. Remove the Plaid item first (while we still have the access token)
+      // 1. Server-side cleanup via provider.disconnect() (e.g. Plaid itemRemove)
       try {
         const credential = await getCredential(conn.keychain_key);
         if (credential) {
-          await getPlaidClient().itemRemove({ access_token: credential });
+          const provider = registry.create(conn.provider, credential, {
+            item_id: conn.item_id,
+            institution_id: conn.institution_id,
+            institution_name: conn.institution_name,
+          });
+          if (provider.disconnect) {
+            await provider.disconnect();
+          }
         }
       } catch { /* best-effort — item may already be removed */ }
 
       // 2. Delete all accounts from this connection (transactions + holdings cascade via FK)
       const connAccounts = toRow<{ id: string }[]>(
-        db.prepare('SELECT id FROM accounts WHERE source = ? AND institution = ?')
-          .all('plaid', account.institution)
+        db.prepare('SELECT id FROM accounts WHERE connection_id = ?').all(conn.id)
       );
 
       for (const ca of connAccounts) {
@@ -103,11 +111,11 @@ export async function deleteAccount(db: Database, input: { id: string }): Promis
       // 3. Delete credential and connection row
       try { await deleteCredential(conn.keychain_key); } catch { /* best-effort */ }
       db.prepare('DELETE FROM provider_connections WHERE id = ?').run(conn.id);
-      plaidConnectionRemoved = true;
+      connectionRemoved = true;
     }
   }
 
-  // For manual accounts, or if no Plaid connection was found
+  // For manual accounts, or if no provider connection was found
   if (deletedAccounts === 0) {
     totalTx = (db.prepare('SELECT COUNT(*) as c FROM transactions WHERE account_id = ?').get(input.id) as { c: number }).c;
     totalHoldings = (db.prepare('SELECT COUNT(*) as c FROM portfolio_holdings WHERE account_id = ?').get(input.id) as { c: number }).c;
@@ -119,7 +127,7 @@ export async function deleteAccount(db: Database, input: { id: string }): Promis
     deleted_accounts: deletedAccounts,
     deleted_transactions: totalTx,
     deleted_holdings: totalHoldings,
-    plaid_connection_removed: plaidConnectionRemoved,
+    connection_removed: connectionRemoved,
   };
 }
 

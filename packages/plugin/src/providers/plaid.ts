@@ -130,6 +130,10 @@ export class PlaidDataProvider implements DataProvider {
     }));
   }
 
+  async disconnect(): Promise<void> {
+    await getPlaidClient().itemRemove({ access_token: this.accessToken });
+  }
+
   async getHoldings(): Promise<RawHolding[]> {
     try {
       const client = getPlaidClient();

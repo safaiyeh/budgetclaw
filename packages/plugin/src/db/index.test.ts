@@ -37,10 +37,19 @@ describe('Database', () => {
     expect(tableNames).toContain('provider_connections');
   });
 
-  it('sets PRAGMA user_version = 1 after migration', () => {
+  it('sets PRAGMA user_version = 2 after migration', () => {
     const db = getDb(':memory:');
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
-    expect(row.user_version).toBe(1);
+    expect(row.user_version).toBe(2);
+  });
+
+  it('adds connection_id column to accounts table', () => {
+    const db = getDb(':memory:');
+    const columns = db
+      .prepare(`PRAGMA table_info(accounts)`)
+      .all() as { name: string }[];
+    const columnNames = columns.map((c) => c.name);
+    expect(columnNames).toContain('connection_id');
   });
 
   it('seeds built-in categories', () => {

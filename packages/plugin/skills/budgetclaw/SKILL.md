@@ -124,7 +124,7 @@ When a user is new to BudgetClaw (no accounts exist), walk them through setup:
 1. Call `budgetclaw_get_accounts` to find the account.
 2. **Ask the user to confirm** before calling `budgetclaw_delete_account`. Tell them exactly what will be deleted:
    - For manual accounts: "This will permanently delete [account name] and all its transactions and holdings."
-   - For Plaid accounts: "This will permanently delete [account name] and all other accounts from [institution], disconnect [institution] from Plaid, and remove all synced transactions and holdings."
+   - For connected accounts: "This will permanently delete [account name] and all other accounts from this connection, disconnect the provider, and remove all synced transactions and holdings."
 3. Only call `budgetclaw_delete_account` after the user confirms.
 
 **To delete ALL accounts and start fresh:**
@@ -267,6 +267,46 @@ After syncing, `budgetclaw_get_accounts` shows the latest balances pulled from P
 ### Credential Storage
 
 Plaid access tokens are stored in an encrypted file at `~/.budgetclaw/credentials.json.enc` (AES-256-GCM).
+
+---
+
+## Coinbase Integration
+
+Track your crypto portfolio and fiat balances from Coinbase.
+
+### Setup
+
+1. Go to [coinbase.com/settings/api](https://coinbase.com/settings/api)
+2. Create a new API key with **read-only** permissions (accounts, transactions)
+3. Copy the API key and API secret
+
+### Connecting Coinbase
+
+This is a single-step flow:
+
+1. Call `budgetclaw_coinbase_link { api_key, api_secret }` — validates the credentials, then automatically syncs all crypto wallets, fiat balances, and transaction history.
+
+If `budgetclaw_coinbase_link` returns `{status:"duplicate"}`, Coinbase is already connected.
+
+### What Gets Synced
+
+- **Crypto wallets** — all crypto holdings are aggregated into a single "Coinbase Crypto" account (type: `crypto`) with individual holdings per coin (BTC, ETH, etc.)
+- **Fiat wallets** — USD and other fiat wallets appear as separate `checking` accounts
+- **Transactions** — buys, sells, sends, receives, and other completed transactions
+- **Holdings** — each crypto position with current price and value
+
+### Syncing
+
+The first sync happens automatically when Coinbase is linked. For subsequent syncs:
+
+| Step | Tool | Notes |
+|------|------|-------|
+| 1 | `budgetclaw_sync_connection { id: connection_id }` | Pull new transactions and update balances |
+| 2 | `budgetclaw_get_portfolio` | View crypto holdings with prices |
+
+### Deleting Coinbase
+
+Call `budgetclaw_delete_account` with any Coinbase account ID. This removes all connected Coinbase accounts, transactions, holdings, and the stored API credentials.
 
 ---
 

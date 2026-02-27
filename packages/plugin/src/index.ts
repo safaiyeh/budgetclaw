@@ -27,7 +27,9 @@ import { readStatement, importTransactions } from './tools/statements.js';
 import { listConnections, syncConnection } from './tools/connections.js';
 import { defaultRegistry } from './providers/registry.js';
 import { PlaidDataProvider } from './providers/plaid.js';
+import { CoinbaseDataProvider } from './providers/coinbase.js';
 import { startPlaidLink, completePlaidLink } from './tools/plaid-link.js';
+import { linkCoinbase } from './tools/coinbase-link.js';
 
 // ─── Local helpers ────────────────────────────────────────────────────────────
 
@@ -98,8 +100,9 @@ function tool(def: {
 export function register(api: OpenClawPluginApi, dbPath?: string): void {
   const db = getDb(dbPath);
 
-  // Register Plaid provider with the registry
+  // Register providers with the registry
   defaultRegistry.register('plaid', (credential, meta) => new PlaidDataProvider(credential, meta));
+  defaultRegistry.register('coinbase', (credential) => new CoinbaseDataProvider(credential));
 
   // ── Accounts ──────────────────────────────────────────────────────────────
 
@@ -143,7 +146,7 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
 
   api.registerTool(tool({
     name: 'budgetclaw_delete_account',
-    description: 'DESTRUCTIVE: Delete an account and all its data (transactions, holdings). For Plaid accounts, also removes the Plaid item, deletes all sibling accounts from the same bank connection, and cleans up credentials. IMPORTANT: You MUST ask the user to confirm before calling this tool. Tell them exactly what will be deleted and wait for explicit confirmation.',
+    description: 'DESTRUCTIVE: Delete an account and all its data (transactions, holdings). For connected accounts, also disconnects the provider, deletes all sibling accounts from the same connection, and cleans up credentials. IMPORTANT: You MUST ask the user to confirm before calling this tool. Tell them exactly what will be deleted and wait for explicit confirmation.',
     parameters: {
       type: 'object',
       properties: {
@@ -151,7 +154,7 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
       },
       required: ['id'],
     },
-    execute: (p) => deleteAccount(db, p as { id: string }),
+    execute: (p) => deleteAccount(db, p as { id: string }, defaultRegistry),
   }));
 
   // ── Transactions ──────────────────────────────────────────────────────────
@@ -538,6 +541,22 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
     },
     execute: (p) => completePlaidLink(db, defaultRegistry, p as { link_token: string; institution_name?: string }),
   }));
+
+  // ── Coinbase ───────────────────────────────────────────────────────────
+
+  api.registerTool(tool({
+    name: 'budgetclaw_coinbase_link',
+    description: 'Connect a Coinbase account using API key authentication. Create a read-only API key at coinbase.com/settings/api and provide the key and secret. Validates credentials, then automatically syncs crypto wallets, fiat balances, and transaction history.',
+    parameters: {
+      type: 'object',
+      properties: {
+        api_key:    { type: 'string', description: 'Coinbase API key' },
+        api_secret: { type: 'string', description: 'Coinbase API secret' },
+      },
+      required: ['api_key', 'api_secret'],
+    },
+    execute: (p) => linkCoinbase(db, defaultRegistry, p as { api_key: string; api_secret: string }),
+  }));
 }
 
 export default { register };
@@ -548,6 +567,7 @@ export type { AccountRow, TransactionRow, BudgetRow, PortfolioHoldingRow, NetWor
 export type { DataProvider, RawAccount, RawTransaction, RawBalance } from './providers/interface.js';
 export type { PriceProvider, PriceResult, AssetType } from './prices/interface.js';
 export { CsvDataProvider } from './providers/csv.js';
+export { CoinbaseDataProvider } from './providers/coinbase.js';
 export { defaultRegistry, ProviderRegistry } from './providers/registry.js';
 export type { ProviderFactory, ProviderConnectionMeta } from './providers/registry.js';
 export { priceRegistry } from './prices/registry.js';
