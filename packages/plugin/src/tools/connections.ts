@@ -2,6 +2,7 @@ import type { Database } from '../db/index.js';
 import { toRow } from '../db/types.js';
 import type { ProviderConnectionRow } from '../db/types.js';
 import { getCredential, deleteCredential } from '../credentials/keychain.js';
+import { getPlaidClient } from '../providers/plaid-client.js';
 import type { ProviderRegistry } from '../providers/registry.js';
 import { upsertHolding } from './portfolio.js';
 import type { AssetType } from '../prices/interface.js';
@@ -27,16 +28,26 @@ export function listConnections(db: Database): ListConnectionsResult {
 }
 
 export async function removeConnection(db: Database, id: string): Promise<{ removed: boolean }> {
-  const row = toRow<{ keychain_key: string } | undefined>(
-    db.prepare('SELECT keychain_key FROM provider_connections WHERE id = ?').get(id)
+  const conn = toRow<ProviderConnectionRow | undefined>(
+    db.prepare('SELECT * FROM provider_connections WHERE id = ?').get(id)
   );
 
-  if (!row) {
+  if (!conn) {
     throw new Error(`Connection "${id}" not found`);
   }
 
+  // Remove the Plaid item (stops billing, revokes access token)
+  if (conn.provider === 'plaid') {
+    try {
+      const credential = await getCredential(conn.keychain_key);
+      if (credential) {
+        await getPlaidClient().itemRemove({ access_token: credential });
+      }
+    } catch { /* best-effort — item may already be removed */ }
+  }
+
   try {
-    await deleteCredential(row.keychain_key);
+    await deleteCredential(conn.keychain_key);
   } catch {
     // Non-fatal — credential may have been manually removed
   }
