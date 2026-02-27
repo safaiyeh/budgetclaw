@@ -525,7 +525,7 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
 
   api.registerTool(tool({
     name: 'budgetclaw_plaid_link_complete',
-    description: 'Wait for the user to finish connecting their bank via Plaid Link. Call this after sending the user the URL from budgetclaw_plaid_link. Polls for up to 5 minutes. Returns {status:"complete"} with connection details on success, or {status:"waiting"} if the user hasn\'t finished yet — if waiting, ask the user if they\'re done and call this tool again.',
+    description: 'Wait for the user to finish connecting their bank via Plaid Link. Call this after sending the user the URL from budgetclaw_plaid_link. Polls for up to 5 minutes. On success, automatically syncs accounts, transactions, and holdings, then returns {status:"complete"} with sync results. Returns {status:"waiting"} if the user hasn\'t finished yet — if so, ask the user and call again.',
     parameters: {
       type: 'object',
       properties: {
@@ -534,7 +534,7 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
       },
       required: ['link_token'],
     },
-    execute: (p) => completePlaidLink(db, p as Parameters<typeof completePlaidLink>[1]),
+    execute: (p) => completePlaidLink(db, defaultRegistry, p as { link_token: string; institution_name?: string }),
   }));
 }
 

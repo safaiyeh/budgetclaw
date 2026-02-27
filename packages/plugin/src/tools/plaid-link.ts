@@ -2,6 +2,8 @@ import { Products, CountryCode } from 'plaid';
 import type { Database } from '../db/index.js';
 import { setCredential } from '../credentials/keychain.js';
 import { getPlaidClient } from '../providers/plaid-client.js';
+import { syncConnection } from './connections.js';
+import type { ProviderRegistry } from '../providers/registry.js';
 
 const POLL_INTERVAL_MS = 3_000;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 minutes per attempt (fits within agent turn timeout)
@@ -25,7 +27,14 @@ export interface LinkPlaidCompleteInput {
 }
 
 export type LinkPlaidCompleteResult =
-  | { status: 'complete'; connection_id: string; institution_name: string; accounts_found: number }
+  | {
+      status: 'complete';
+      connection_id: string;
+      institution_name: string;
+      accounts_synced: number;
+      transactions_added: number;
+      holdings_synced: number;
+    }
   | { status: 'waiting' };
 
 /**
@@ -65,7 +74,7 @@ export async function startPlaidLink(_db: Database, input: LinkPlaidInput): Prom
  * Step 2: Poll until the user completes the Plaid Link session, then exchange
  * the token and store the connection.
  */
-export async function completePlaidLink(db: Database, input: LinkPlaidCompleteInput): Promise<LinkPlaidCompleteResult> {
+export async function completePlaidLink(db: Database, registry: ProviderRegistry, input: LinkPlaidCompleteInput): Promise<LinkPlaidCompleteResult> {
   const client = getPlaidClient();
   const { link_token: linkToken } = input;
 
@@ -141,10 +150,15 @@ export async function completePlaidLink(db: Database, input: LinkPlaidCompleteIn
     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)
   `).run(connectionId, 'plaid', institutionId, resolvedInstitutionName, itemId, keychainKey, now, now);
 
+  // Auto-sync accounts, transactions, and holdings immediately
+  const sync = await syncConnection(db, connectionId, registry);
+
   return {
     status: 'complete' as const,
     connection_id: connectionId,
     institution_name: resolvedInstitutionName,
-    accounts_found: accountCount,
+    accounts_synced: sync.accounts_synced,
+    transactions_added: sync.transactions_added,
+    holdings_synced: sync.holdings_synced,
   };
 }
