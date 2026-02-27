@@ -1,9 +1,3 @@
-import { createServer } from 'node:https';
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-import { exec } from 'node:child_process';
-import selfsigned from 'selfsigned';
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 import type { Database } from '../db/index.js';
 import { setCredential } from '../credentials/keychain.js';
@@ -11,7 +5,6 @@ import { setCredential } from '../credentials/keychain.js';
 function getPlaidClient(): PlaidApi {
   const clientId = process.env['PLAID_CLIENT_ID'];
   const secret = process.env['PLAID_SECRET'];
-  const envName = (process.env['PLAID_ENV'] ?? 'sandbox') as keyof typeof PlaidEnvironments;
 
   if (!clientId) {
     throw new Error(
@@ -26,15 +19,8 @@ function getPlaidClient(): PlaidApi {
     );
   }
 
-  const baseURL = PlaidEnvironments[envName];
-  if (!baseURL) {
-    throw new Error(
-      `Invalid PLAID_ENV "${envName}". Valid values: ${Object.keys(PlaidEnvironments).join(', ')}`,
-    );
-  }
-
   const config = new Configuration({
-    basePath: baseURL,
+    basePath: PlaidEnvironments['production'],
     baseOptions: {
       headers: {
         'PLAID-CLIENT-ID': clientId,
@@ -46,114 +32,11 @@ function getPlaidClient(): PlaidApi {
   return new PlaidApi(config);
 }
 
-function openBrowser(url: string): void {
-  const platform = process.platform;
-  let cmd: string;
+const POLL_INTERVAL_MS = 3_000;
+const POLL_TIMEOUT_MS = 30 * 60 * 1_000; // 30 minutes
 
-  if (platform === 'darwin') {
-    cmd = `open "${url}"`;
-  } else if (platform === 'win32') {
-    cmd = `start "" "${url}"`;
-  } else {
-    cmd = `xdg-open "${url}"`;
-  }
-
-  exec(cmd, (err) => {
-    if (err) {
-      console.error(`Could not open browser automatically. Please open: ${url}`);
-    }
-  });
-}
-
-function buildLinkHtml(linkToken: string, isCallback: boolean): string {
-  const receivedRedirectUri = isCallback
-    ? `receivedRedirectUri: window.location.href,`
-    : '';
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>BudgetClaw — Connect Bank Account</title>
-  <style>
-    body { font-family: -apple-system, sans-serif; display: flex; justify-content: center;
-           align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
-    .card { background: white; border-radius: 12px; padding: 40px; text-align: center;
-            box-shadow: 0 2px 16px rgba(0,0,0,0.1); max-width: 400px; }
-    h2 { margin: 0 0 8px; color: #1a1a1a; }
-    p { color: #666; margin: 0 0 24px; }
-    .status { color: #888; font-size: 14px; margin-top: 16px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h2>BudgetClaw</h2>
-    <p>Connecting your bank account via Plaid...</p>
-    <div class="status" id="status">Opening Plaid Link...</div>
-  </div>
-  <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
-  <script>
-    const handler = Plaid.create({
-      token: ${JSON.stringify(linkToken)},
-      ${receivedRedirectUri}
-      onSuccess: function(publicToken, metadata) {
-        document.getElementById('status').textContent = 'Exchanging token...';
-        fetch('/exchange', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ public_token: publicToken }),
-        }).then(function() {
-          document.getElementById('status').textContent =
-            'Success! You can close this window and return to the terminal.';
-        }).catch(function(err) {
-          document.getElementById('status').textContent = 'Error: ' + err.message;
-        });
-      },
-      onExit: function(err, metadata) {
-        if (err) {
-          document.getElementById('status').textContent = 'Error: ' + (err.display_message || err.error_message || 'Unknown error');
-        } else {
-          document.getElementById('status').textContent = 'Cancelled. You can close this window.';
-        }
-      },
-    });
-    handler.open();
-  </script>
-</body>
-</html>`;
-}
-
-function getTlsCert(): { key: string; cert: string } {
-  const dir = join(homedir(), '.budgetclaw', 'tls');
-  const keyPath = join(dir, 'key.pem');
-  const certPath = join(dir, 'cert.pem');
-
-  // Reuse existing cert if already generated
-  if (existsSync(keyPath) && existsSync(certPath)) {
-    return { key: readFileSync(keyPath, 'utf8'), cert: readFileSync(certPath, 'utf8') };
-  }
-
-  // Generate self-signed cert for localhost
-  const pems = selfsigned.generate(
-    [{ name: 'commonName', value: 'localhost' }],
-    {
-      days: 825,
-      algorithm: 'sha256',
-      extensions: [{
-        name: 'subjectAltName',
-        altNames: [
-          { type: 2, value: 'localhost' },
-          { type: 7, ip: '127.0.0.1' },
-        ],
-      }],
-    }
-  );
-
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(keyPath, pems.private, { mode: 0o600 });
-  writeFileSync(certPath, pems.cert, { mode: 0o644 });
-
-  return { key: pems.private, cert: pems.cert };
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export interface LinkPlaidInput {
@@ -164,87 +47,70 @@ export interface LinkPlaidResult {
   connection_id: string;
   institution_name: string;
   accounts_found: number;
+  link_url: string;
 }
 
 export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<LinkPlaidResult> {
   const client = getPlaidClient();
-  const port = parseInt(process.env['PLAID_LINK_PORT'] ?? '8181', 10);
-  const redirectUri = `https://localhost:${port}/callback`;
 
-  // 1. Create link token
+  // 1. Create link token with hosted_link enabled
   const linkTokenResponse = await client.linkTokenCreate({
     user: { client_user_id: 'budgetclaw-user' },
     client_name: 'BudgetClaw',
     products: [Products.Transactions, Products.Investments],
     country_codes: [CountryCode.Us],
     language: 'en',
-    redirect_uri: redirectUri,
+    hosted_link: {
+      url_lifetime_seconds: 1800, // 30 minutes
+    },
   });
 
   const linkToken = linkTokenResponse.data.link_token;
+  const hostedLinkUrl = linkTokenResponse.data.hosted_link_url;
 
-  // 2. Start local HTTP server and wait for public_token
-  const publicToken = await new Promise<string>((resolve, reject) => {
-    const TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+  if (!hostedLinkUrl) {
+    throw new Error(
+      'Plaid did not return a hosted_link_url. ' +
+      'Ensure Hosted Link is enabled in your Plaid dashboard (Settings → Link Customization).',
+    );
+  }
 
-    const timeout = setTimeout(() => {
-      server.close();
-      reject(new Error('Plaid Link timed out after 10 minutes. Run budgetclaw_plaid_link again.'));
-    }, TIMEOUT_MS);
+  // Log URL to stderr so it's visible in terminal
+  console.error(`\nPlaid Link URL: ${hostedLinkUrl}`);
+  console.error('Open this URL in your browser to connect your bank account.\n');
 
-    const { key, cert } = getTlsCert();
-    const server = createServer({ key, cert }, (req, res) => {
-      const url = req.url ?? '/';
+  // 2. Poll linkTokenGet until the session completes
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+  let publicToken: string | undefined;
 
-      // Serve the Plaid Link page
-      if (req.method === 'GET' && (url === '/' || url.startsWith('/callback'))) {
-        const isCallback = url.startsWith('/callback');
-        const html = buildLinkHtml(linkToken, isCallback);
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(html);
-        return;
-      }
+  while (Date.now() < deadline) {
+    await sleep(POLL_INTERVAL_MS);
 
-      // Receive public_token from onSuccess
-      if (req.method === 'POST' && url === '/exchange') {
-        let body = '';
-        req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
-        req.on('end', () => {
-          try {
-            const { public_token } = JSON.parse(body) as { public_token: string };
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: true }));
-            clearTimeout(timeout);
-            server.close();
-            resolve(public_token);
-          } catch (e) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Invalid request body' }));
-            clearTimeout(timeout);
-            server.close();
-            reject(e);
-          }
-        });
-        return;
-      }
+    const getResp = await client.linkTokenGet({ link_token: linkToken });
+    const session = getResp.data.link_sessions?.[0];
 
-      res.writeHead(404);
-      res.end();
-    });
+    if (!session) continue;
 
-    server.listen(port, '127.0.0.1', () => {
-      const url = `https://localhost:${port}/`;
-      console.log(`\nOpening Plaid Link at ${url}`);
-      console.log('Sign in to your bank, then return to this terminal.');
-      console.log('Note: your browser will warn about the self-signed certificate — click Advanced → Proceed to continue.\n');
-      openBrowser(url);
-    });
+    // Session started but not finished yet
+    if (!session.finished_at) continue;
 
-    server.on('error', (e) => {
-      clearTimeout(timeout);
-      reject(new Error(`Could not start local server on port ${port}: ${(e as NodeJS.ErrnoException).message}`));
-    });
-  });
+    // Check if user successfully linked an item
+    const itemResult = session.results?.item_add_results?.[0];
+    if (itemResult?.public_token) {
+      publicToken = itemResult.public_token;
+      break;
+    }
+
+    // Session finished but no item — user exited/abandoned
+    const exitReason = session.exit?.error?.display_message
+      ?? session.exit?.error?.error_message
+      ?? 'User exited Plaid Link without connecting a bank.';
+    throw new Error(exitReason);
+  }
+
+  if (!publicToken) {
+    throw new Error('Plaid Link timed out after 30 minutes. Run budgetclaw_plaid_link again.');
+  }
 
   // 3. Exchange public token for access token
   const exchangeResponse = await client.itemPublicTokenExchange({
@@ -277,7 +143,7 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
 
   const accountCount = accountsResponse.data.accounts.length;
 
-  // 5. Store access token in OS keychain
+  // 5. Store access token in credential store
   const connectionId = crypto.randomUUID();
   const keychainKey = `plaid-${connectionId}`;
   await setCredential(keychainKey, accessToken);
@@ -294,5 +160,6 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
     connection_id: connectionId,
     institution_name: resolvedInstitutionName,
     accounts_found: accountCount,
+    link_url: hostedLinkUrl,
   };
 }
