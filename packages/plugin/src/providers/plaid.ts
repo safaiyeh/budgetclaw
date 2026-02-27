@@ -155,7 +155,7 @@ export class PlaidDataProvider implements DataProvider {
       // Gracefully handle items linked before investments product was added
       const errCode = (e as { response?: { data?: { error_code?: string } } })
         ?.response?.data?.error_code;
-      if (errCode === 'INVALID_PRODUCT' || errCode === 'PRODUCTS_NOT_SUPPORTED') return [];
+      if (errCode === 'INVALID_PRODUCT' || errCode === 'PRODUCTS_NOT_SUPPORTED' || errCode === 'NO_INVESTMENT_ACCOUNTS') return [];
       throw e;
     }
   }
