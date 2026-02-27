@@ -28,8 +28,11 @@ import { listConnections, syncConnection } from './tools/connections/index.js';
 import { defaultRegistry } from './providers/registry.js';
 import { PlaidDataProvider } from './providers/plaid/index.js';
 import { CoinbaseDataProvider } from './providers/coinbase/index.js';
+import { FinicityDataProvider } from './providers/finicity/index.js';
 import { startPlaidLink, completePlaidLink } from './tools/connections/plaid-link.js';
 import { linkCoinbase } from './tools/connections/coinbase-link.js';
+import { startFinicityLink, completeFinicityLink } from './tools/connections/finicity-link.js';
+import { connectBank, completeConnectBank } from './tools/connections/connect-bank.js';
 
 // ─── Local helpers ────────────────────────────────────────────────────────────
 
@@ -103,6 +106,7 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
   // Register providers with the registry
   defaultRegistry.register('plaid', (credential, meta) => new PlaidDataProvider(credential, meta));
   defaultRegistry.register('coinbase', (credential) => new CoinbaseDataProvider(credential));
+  defaultRegistry.register('finicity', (credential, meta) => new FinicityDataProvider(credential, meta));
 
   // ── Accounts ──────────────────────────────────────────────────────────────
 
@@ -557,6 +561,61 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
     },
     execute: (p) => linkCoinbase(db, defaultRegistry, p as { api_key: string; api_secret: string }),
   }));
+
+  // ── Finicity ────────────────────────────────────────────────────────────
+
+  api.registerTool(tool({
+    name: 'budgetclaw_finicity_link',
+    description: 'Generate a Finicity Connect URL for linking a bank account. Returns the URL — send it to the user so they can open it in their browser. Then call budgetclaw_finicity_link_complete with the customer_id to discover newly linked accounts. Requires FINICITY_PARTNER_ID, FINICITY_PARTNER_SECRET, and FINICITY_APP_KEY env vars.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+    execute: (p) => startFinicityLink(db, p as Record<string, unknown>),
+  }));
+
+  api.registerTool(tool({
+    name: 'budgetclaw_finicity_link_complete',
+    description: 'Finish connecting bank accounts after the user completes Finicity Connect. Only call this after the user confirms they finished linking. Discovers new institution logins, syncs accounts and transactions. Returns {status:"complete"} with sync results, {status:"duplicate"} if the bank is already connected, or {status:"waiting"} if not yet finished.',
+    parameters: {
+      type: 'object',
+      properties: {
+        customer_id: { type: 'string', description: 'The customer_id returned by budgetclaw_finicity_link' },
+      },
+      required: ['customer_id'],
+    },
+    execute: (p) => completeFinicityLink(db, defaultRegistry, p as { customer_id: string }),
+  }));
+
+  // ── Connect Bank (unified smart routing) ────────────────────────────────
+
+  api.registerTool(tool({
+    name: 'budgetclaw_connect_bank',
+    description: 'Recommended: Connect a bank account by name. Automatically searches both Plaid and Finicity to find the best provider. Prefers Plaid (free tier) and falls back to Finicity for institutions Plaid doesn\'t support. Returns a link URL for the user to open. Then call budgetclaw_connect_bank_complete with the provider and completion_token.',
+    parameters: {
+      type: 'object',
+      properties: {
+        institution_name: { type: 'string', description: 'Name of the bank or credit union (e.g. "Chase", "Navy Federal")' },
+      },
+      required: ['institution_name'],
+    },
+    execute: (p) => connectBank(db, defaultRegistry, p as { institution_name: string }),
+  }));
+
+  api.registerTool(tool({
+    name: 'budgetclaw_connect_bank_complete',
+    description: 'Finish connecting a bank after the user completes the link flow started by budgetclaw_connect_bank. Routes to the correct provider (Plaid or Finicity) based on the provider field.',
+    parameters: {
+      type: 'object',
+      properties: {
+        provider: { type: 'string', enum: ['plaid', 'finicity'], description: 'Provider used (from budgetclaw_connect_bank result)' },
+        completion_token: { type: 'string', description: 'The completion_token returned by budgetclaw_connect_bank' },
+        institution_name: { type: 'string', description: 'Optional institution name' },
+      },
+      required: ['provider', 'completion_token'],
+    },
+    execute: (p) => completeConnectBank(db, defaultRegistry, p as { provider: 'plaid' | 'finicity'; completion_token: string; institution_name?: string }),
+  }));
 }
 
 export default { register };
@@ -568,6 +627,7 @@ export type { DataProvider, RawAccount, RawTransaction, RawBalance } from './pro
 export type { PriceProvider, PriceResult, AssetType } from './prices/interface.js';
 export { CsvDataProvider } from './providers/csv/index.js';
 export { CoinbaseDataProvider } from './providers/coinbase/index.js';
+export { FinicityDataProvider } from './providers/finicity/index.js';
 export { defaultRegistry, ProviderRegistry } from './providers/registry.js';
 export type { ProviderFactory, ProviderConnectionMeta } from './providers/registry.js';
 export { priceRegistry } from './prices/registry.js';
