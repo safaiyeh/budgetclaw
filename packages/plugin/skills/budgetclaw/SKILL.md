@@ -224,12 +224,11 @@ Connect real bank accounts to automatically sync transactions and balances.
 This is a two-step flow:
 
 1. Call `budgetclaw_plaid_link` — returns a `link_url` and `link_token` immediately.
-2. **Send the `link_url` to the user** so they can open it (works on any device).
-3. Call `budgetclaw_plaid_link_complete { link_token }` — polls until the user finishes (up to 5 min), then stores the connection and **automatically syncs** accounts, transactions, and holdings.
+2. **Send the `link_url` to the user** and tell them to let you know when they're done.
+3. **Wait for the user to confirm** they finished linking. Do NOT call the complete tool until the user says they're done.
+4. Call `budgetclaw_plaid_link_complete { link_token }` — confirms completion with Plaid, then automatically syncs accounts, transactions, and holdings.
 
-If `budgetclaw_plaid_link_complete` returns `{status:"waiting"}`, the user hasn't finished yet — ask them and call it again.
-
-**Important:** You MUST send the URL to the user before calling the complete step. The complete step blocks until the user finishes.
+If `budgetclaw_plaid_link_complete` returns `{status:"waiting"}`, Plaid hasn't received the completion yet — ask the user to try again or wait a moment, then retry.
 
 ### Syncing Transactions
 

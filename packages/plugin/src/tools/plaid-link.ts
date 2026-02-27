@@ -5,8 +5,8 @@ import { getPlaidClient } from '../providers/plaid-client.js';
 import { syncConnection } from './connections.js';
 import type { ProviderRegistry } from '../providers/registry.js';
 
-const POLL_INTERVAL_MS = 3_000;
-const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 minutes per attempt (fits within agent turn timeout)
+const POLL_INTERVAL_MS = 2_000;
+const POLL_TIMEOUT_MS = 30_000; // 30 seconds — user should already be done when this is called
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
