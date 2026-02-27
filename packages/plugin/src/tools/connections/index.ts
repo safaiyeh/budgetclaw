@@ -1,11 +1,10 @@
-import type { Database } from '../db/index.js';
-import { toRow } from '../db/types.js';
-import type { ProviderConnectionRow } from '../db/types.js';
-import { getCredential, deleteCredential } from '../credentials/keychain.js';
-import { getPlaidClient } from '../providers/plaid-client.js';
-import type { ProviderRegistry } from '../providers/registry.js';
-import { upsertHolding } from './portfolio.js';
-import type { AssetType } from '../prices/interface.js';
+import type { Database } from '../../db/index.js';
+import { toRow } from '../../db/types.js';
+import type { ProviderConnectionRow } from '../../db/types.js';
+import { getCredential, deleteCredential } from '../../credentials/keychain.js';
+import type { ProviderRegistry } from '../../providers/registry.js';
+import { upsertHolding } from '../portfolio/index.js';
+import type { AssetType } from '../../prices/interface.js';
 
 function now(): string {
   return new Date().toISOString();
@@ -27,7 +26,7 @@ export function listConnections(db: Database): ListConnectionsResult {
   return { connections: rows };
 }
 
-export async function removeConnection(db: Database, id: string): Promise<{ removed: boolean }> {
+export async function removeConnection(db: Database, id: string, registry: ProviderRegistry): Promise<{ removed: boolean }> {
   const conn = toRow<ProviderConnectionRow | undefined>(
     db.prepare('SELECT * FROM provider_connections WHERE id = ?').get(id)
   );
@@ -36,15 +35,20 @@ export async function removeConnection(db: Database, id: string): Promise<{ remo
     throw new Error(`Connection "${id}" not found`);
   }
 
-  // Remove the Plaid item (stops billing, revokes access token)
-  if (conn.provider === 'plaid') {
-    try {
-      const credential = await getCredential(conn.keychain_key);
-      if (credential) {
-        await getPlaidClient().itemRemove({ access_token: credential });
+  // Server-side cleanup via provider.disconnect() (e.g. Plaid itemRemove)
+  try {
+    const credential = await getCredential(conn.keychain_key);
+    if (credential) {
+      const provider = registry.create(conn.provider, credential, {
+        item_id: conn.item_id,
+        institution_id: conn.institution_id,
+        institution_name: conn.institution_name,
+      });
+      if (provider.disconnect) {
+        await provider.disconnect();
       }
-    } catch { /* best-effort — item may already be removed */ }
-  }
+    }
+  } catch { /* best-effort — item may already be removed */ }
 
   try {
     await deleteCredential(conn.keychain_key);
@@ -109,12 +113,12 @@ export async function syncConnection(
   );
   const insertAccountStmt = db.prepare(`
     INSERT INTO accounts
-      (id, name, institution, type, currency, balance, source, external_id, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      (id, name, institution, type, currency, balance, source, external_id, connection_id, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
   `);
   const updateAccountStmt = db.prepare(`
     UPDATE accounts
-    SET name = ?, institution = ?, type = ?, currency = ?, balance = ?, updated_at = ?
+    SET name = ?, institution = ?, type = ?, currency = ?, balance = ?, connection_id = ?, updated_at = ?
     WHERE id = ?
   `);
 
@@ -130,6 +134,7 @@ export async function syncConnection(
         raw.type,
         raw.currency ?? 'USD',
         raw.balance ?? null,
+        id,
         ts,
         existing.id,
       );
@@ -139,7 +144,7 @@ export async function syncConnection(
       insertAccountStmt.run(
         accountId, raw.name, raw.institution ?? null, raw.type,
         raw.currency ?? 'USD', raw.balance ?? null,
-        conn.provider, raw.external_id, ts, ts,
+        conn.provider, raw.external_id, id, ts, ts,
       );
       accountIdMap.set(raw.external_id, accountId);
     }
@@ -218,13 +223,12 @@ export async function syncConnection(
     }
   }
 
-  // 7. Sync holdings — only for providers that support it AND when investment accounts exist
-  const hasInvestmentAccounts = rawAccounts.some((a) => a.type === 'investment');
-  if (provider.getHoldings && hasInvestmentAccounts) {
+  // 7. Sync holdings — only for providers that support it
+  if (provider.getHoldings) {
     const rawHoldings = await provider.getHoldings();
     const updatePriceSourceStmt = db.prepare(
       `UPDATE portfolio_holdings
-       SET price_source = 'plaid', price_as_of = ?, updated_at = ?
+       SET price_source = ?, price_as_of = ?, updated_at = ?
        WHERE account_id = ? AND symbol = ?`
     );
     for (const raw of rawHoldings) {
@@ -239,9 +243,9 @@ export async function syncConnection(
         asset_type: raw.asset_type as AssetType | undefined,
         currency: raw.currency,
       });
-      // upsertHolding labels price_source='manual'; correct it to 'plaid'
+      // upsertHolding labels price_source='manual'; correct it to the provider
       if (raw.price != null) {
-        updatePriceSourceStmt.run(raw.price_as_of ?? null, ts, accountId, raw.symbol.toUpperCase());
+        updatePriceSourceStmt.run(conn.provider, raw.price_as_of ?? null, ts, accountId, raw.symbol.toUpperCase());
       }
       holdings_synced++;
     }

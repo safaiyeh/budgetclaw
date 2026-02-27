@@ -1,6 +1,6 @@
-import type { Database } from '../db/index.js';
-import { toRow } from '../db/types.js';
-import type { TransactionRow } from '../db/types.js';
+import type { Database } from '../../db/index.js';
+import { toRow } from '../../db/types.js';
+import type { TransactionRow } from '../../db/types.js';
 
 function uuid(): string {
   return crypto.randomUUID();

@@ -6,9 +6,9 @@ import {
   type Holding,
   type Security,
 } from 'plaid';
-import type { DataProvider, RawAccount, RawTransaction, RawBalance, RawHolding } from './interface.js';
-import type { ProviderConnectionMeta } from './registry.js';
-import { getPlaidClient } from './plaid-client.js';
+import type { DataProvider, RawAccount, RawTransaction, RawBalance, RawHolding } from '../interface.js';
+import type { ProviderConnectionMeta } from '../registry.js';
+import { getPlaidClient } from './client.js';
 
 export class PlaidDataProvider implements DataProvider {
   readonly name = 'plaid';
@@ -128,6 +128,10 @@ export class PlaidDataProvider implements DataProvider {
       balance: a.balances.current ?? 0,
       currency: a.balances.iso_currency_code ?? 'USD',
     }));
+  }
+
+  async disconnect(): Promise<void> {
+    await getPlaidClient().itemRemove({ access_token: this.accessToken });
   }
 
   async getHoldings(): Promise<RawHolding[]> {

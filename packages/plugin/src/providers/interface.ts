@@ -60,4 +60,7 @@ export interface DataProvider {
   getBalances(): Promise<RawBalance[]>;
 
   getHoldings?(): Promise<RawHolding[]>;
+
+  /** Server-side cleanup when disconnecting (e.g. Plaid itemRemove). */
+  disconnect?(): Promise<void>;
 }

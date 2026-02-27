@@ -129,6 +129,32 @@ const MIGRATIONS: Record<number, (db: Database) => void> = {
       insertCategory.run(id, name, parent ?? null, now);
     }
   },
+
+  2: (db) => {
+    // Add connection_id FK from accounts → provider_connections
+    db.exec(`ALTER TABLE accounts ADD COLUMN connection_id TEXT REFERENCES provider_connections(id) ON DELETE SET NULL`);
+
+    // Backfill Plaid accounts: match (source, institution) → (provider, institution_name)
+    db.exec(`
+      UPDATE accounts SET connection_id = (
+        SELECT pc.id FROM provider_connections pc
+        WHERE pc.provider = accounts.source
+          AND pc.institution_name = accounts.institution
+      )
+      WHERE accounts.source = 'plaid'
+    `);
+
+    // Backfill Coinbase accounts: match source='coinbase' → provider='coinbase'
+    db.exec(`
+      UPDATE accounts SET connection_id = (
+        SELECT pc.id FROM provider_connections pc
+        WHERE pc.provider = 'coinbase'
+      )
+      WHERE accounts.source = 'coinbase'
+    `);
+
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_accounts_connection ON accounts(connection_id)`);
+  },
 };
 
 export const LATEST_VERSION = Math.max(...Object.keys(MIGRATIONS).map(Number));

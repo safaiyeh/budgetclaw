@@ -1,9 +1,9 @@
 import { Products, CountryCode } from 'plaid';
-import type { Database } from '../db/index.js';
-import { setCredential } from '../credentials/keychain.js';
-import { getPlaidClient } from '../providers/plaid-client.js';
-import { syncConnection } from './connections.js';
-import type { ProviderRegistry } from '../providers/registry.js';
+import type { Database } from '../../db/index.js';
+import { setCredential } from '../../credentials/keychain.js';
+import { getPlaidClient } from '../../providers/plaid/client.js';
+import { syncConnection } from './index.js';
+import type { ProviderRegistry } from '../../providers/registry.js';
 
 const POLL_INTERVAL_MS = 2_000;
 const POLL_TIMEOUT_MS = 30_000; // 30 seconds — user should already be done when this is called

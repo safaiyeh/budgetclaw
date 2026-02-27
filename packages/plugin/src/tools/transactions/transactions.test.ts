@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getDb, resetDb } from '../db/index.js';
-import { addAccount } from './accounts.js';
+import { getDb, resetDb } from '../../db/index.js';
+import { addAccount } from '../accounts/index.js';
 import {
   addTransaction,
   getTransactions,
   updateTransaction,
   deleteTransaction,
   getSpendingSummary,
-} from './transactions.js';
+} from './index.js';
 
 describe('Transactions', () => {
   beforeEach(() => { resetDb(); });

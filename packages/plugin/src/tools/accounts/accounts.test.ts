@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getDb, resetDb } from '../db/index.js';
-import { addAccount, getAccounts, updateAccountBalance } from './accounts.js';
+import { getDb, resetDb } from '../../db/index.js';
+import { addAccount, getAccounts, updateAccountBalance, deleteAccount } from './index.js';
+import { ProviderRegistry } from '../../providers/registry.js';
 
 describe('Accounts', () => {
   beforeEach(() => { resetDb(); });
@@ -49,5 +50,34 @@ describe('Accounts', () => {
     expect(() =>
       updateAccountBalance(db, { id: 'non-existent', balance: 100 })
     ).toThrow('not found');
+  });
+
+  it('deletes a manual account and its transactions', async () => {
+    const db = getDb(':memory:');
+    const registry = new ProviderRegistry();
+    const account = addAccount(db, { name: 'Checking', type: 'checking' });
+
+    // Add a transaction
+    const ts = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO transactions (id, account_id, date, amount, currency, source, created_at, updated_at)
+       VALUES (?, ?, ?, ?, 'USD', 'manual', ?, ?)`
+    ).run(crypto.randomUUID(), account.id, '2025-01-01', -50, ts, ts);
+
+    const result = await deleteAccount(db, { id: account.id }, registry);
+    expect(result.deleted_accounts).toBe(1);
+    expect(result.deleted_transactions).toBe(1);
+    expect(result.connection_removed).toBe(false);
+
+    const accounts = getAccounts(db);
+    expect(accounts).toHaveLength(0);
+  });
+
+  it('throws when deleting non-existent account', async () => {
+    const db = getDb(':memory:');
+    const registry = new ProviderRegistry();
+    await expect(
+      deleteAccount(db, { id: 'non-existent' }, registry)
+    ).rejects.toThrow('not found');
   });
 });

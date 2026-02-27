@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getDb, resetDb } from '../db/index.js';
-import { addAccount } from './accounts.js';
-import { upsertHolding, deleteHolding, getPortfolio } from './portfolio.js';
+import { getDb, resetDb } from '../../db/index.js';
+import { addAccount } from '../accounts/index.js';
+import { upsertHolding, deleteHolding, getPortfolio } from './index.js';
 
 describe('Portfolio', () => {
   beforeEach(() => { resetDb(); });

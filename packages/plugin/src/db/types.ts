@@ -9,6 +9,7 @@ export interface AccountRow {
   balance: number | null;
   source: string;
   external_id: string | null;
+  connection_id: string | null;
   is_active: number;
   created_at: string;
   updated_at: string;

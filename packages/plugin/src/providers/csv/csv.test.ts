@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CsvDataProvider } from './csv.js';
+import { CsvDataProvider } from './index.js';
 
 describe('CsvDataProvider', () => {
   const tmpFile = join(tmpdir(), `budgetclaw-test-${Date.now()}.csv`);
