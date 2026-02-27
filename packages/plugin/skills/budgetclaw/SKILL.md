@@ -221,9 +221,13 @@ Connect real bank accounts to automatically sync transactions and balances.
 
 ### Connecting a Bank Account
 
-Run `budgetclaw_plaid_link` — it returns a Plaid-hosted URL. **Send that URL to the user** (it works on any device — phone, tablet, desktop). The user taps the link, signs in to their bank, and the tool automatically detects completion via polling.
+This is a two-step flow:
 
-No local server, no certificates, no browser required on the machine running BudgetClaw.
+1. Call `budgetclaw_plaid_link` — returns a `link_url` and `link_token` immediately.
+2. **Send the `link_url` to the user** so they can open it (works on any device).
+3. Call `budgetclaw_plaid_link_complete { link_token }` — polls until the user finishes (up to 30 min), then stores the connection.
+
+**Important:** You MUST send the URL to the user before calling the complete step. The complete step blocks until the user finishes.
 
 ### Syncing Transactions
 
@@ -231,10 +235,12 @@ After linking, use `budgetclaw_sync_connection` to pull transactions:
 
 | Step | Tool | Notes |
 |------|------|-------|
-| 1 | `budgetclaw_plaid_link` | One-time — tap the link, sign in, done |
-| 2 | `budgetclaw_sync_connection { id: connection_id }` | First sync — pulls all available transactions |
-| 3 | `budgetclaw_get_transactions` | View synced transactions |
-| 4 | `budgetclaw_sync_connection { id: connection_id }` | Subsequent syncs — only new/modified/removed |
+| 1 | `budgetclaw_plaid_link` | Get the hosted link URL |
+| 2 | *(send URL to user)* | User opens link and connects their bank |
+| 3 | `budgetclaw_plaid_link_complete { link_token }` | Wait for completion, store connection |
+| 4 | `budgetclaw_sync_connection { id: connection_id }` | First sync — pulls all available transactions |
+| 5 | `budgetclaw_get_transactions` | View synced transactions |
+| 6 | `budgetclaw_sync_connection { id: connection_id }` | Subsequent syncs — only new/modified/removed |
 
 Subsequent syncs use cursor-based pagination — only new, modified, or removed transactions are
 fetched. No duplicates.

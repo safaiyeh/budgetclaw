@@ -27,7 +27,7 @@ import { readStatement, importTransactions } from './tools/statements.js';
 import { listConnections, removeConnection, syncConnection } from './tools/connections.js';
 import { defaultRegistry } from './providers/registry.js';
 import { PlaidDataProvider } from './providers/plaid.js';
-import { linkPlaid } from './tools/plaid-link.js';
+import { startPlaidLink, completePlaidLink } from './tools/plaid-link.js';
 
 // ─── Local helpers ────────────────────────────────────────────────────────────
 
@@ -513,14 +513,28 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
 
   api.registerTool(tool({
     name: 'budgetclaw_plaid_link',
-    description: 'Connect a bank account via Plaid. Opens Plaid Link in your browser — sign in to your bank, then return here. Requires PLAID_CLIENT_ID and PLAID_SECRET env vars.',
+    description: 'Create a Plaid Hosted Link URL for connecting a bank account. Returns the URL immediately — send it to the user so they can open it. Then call budgetclaw_plaid_link_complete with the link_token to wait for them to finish. Requires PLAID_CLIENT_ID and PLAID_SECRET env vars.',
     parameters: {
       type: 'object',
       properties: {
         institution_name: { type: 'string', description: 'Optional name hint (e.g. "Chase")' },
       },
     },
-    execute: (p) => linkPlaid(db, p as Parameters<typeof linkPlaid>[1]),
+    execute: (p) => startPlaidLink(db, p as Parameters<typeof startPlaidLink>[1]),
+  }));
+
+  api.registerTool(tool({
+    name: 'budgetclaw_plaid_link_complete',
+    description: 'Wait for the user to finish connecting their bank via Plaid Link. Call this after sending the user the URL from budgetclaw_plaid_link. Polls for up to 5 minutes. Returns {status:"complete"} with connection details on success, or {status:"waiting"} if the user hasn\'t finished yet — if waiting, ask the user if they\'re done and call this tool again.',
+    parameters: {
+      type: 'object',
+      properties: {
+        link_token: { type: 'string', description: 'The link_token returned by budgetclaw_plaid_link' },
+        institution_name: { type: 'string', description: 'Optional institution name' },
+      },
+      required: ['link_token'],
+    },
+    execute: (p) => completePlaidLink(db, p as Parameters<typeof completePlaidLink>[1]),
   }));
 }
 

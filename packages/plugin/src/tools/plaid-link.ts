@@ -4,7 +4,7 @@ import { setCredential } from '../credentials/keychain.js';
 import { getPlaidClient } from '../providers/plaid-client.js';
 
 const POLL_INTERVAL_MS = 3_000;
-const POLL_TIMEOUT_MS = 30 * 60 * 1_000; // 30 minutes
+const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 minutes per attempt (fits within agent turn timeout)
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -14,17 +14,26 @@ export interface LinkPlaidInput {
   institution_name?: string;
 }
 
-export interface LinkPlaidResult {
-  connection_id: string;
-  institution_name: string;
-  accounts_found: number;
+export interface LinkPlaidStartResult {
   link_url: string;
+  link_token: string;
 }
 
-export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<LinkPlaidResult> {
+export interface LinkPlaidCompleteInput {
+  link_token: string;
+  institution_name?: string;
+}
+
+export type LinkPlaidCompleteResult =
+  | { status: 'complete'; connection_id: string; institution_name: string; accounts_found: number }
+  | { status: 'waiting' };
+
+/**
+ * Step 1: Create a Plaid Hosted Link URL and return it immediately.
+ */
+export async function startPlaidLink(_db: Database, input: LinkPlaidInput): Promise<LinkPlaidStartResult> {
   const client = getPlaidClient();
 
-  // 1. Create link token with hosted_link enabled
   const linkTokenResponse = await client.linkTokenCreate({
     user: { client_user_id: 'budgetclaw-user' },
     client_name: 'BudgetClaw',
@@ -32,7 +41,7 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
     country_codes: [CountryCode.Us],
     language: 'en',
     hosted_link: {
-      url_lifetime_seconds: 1800, // 30 minutes
+      url_lifetime_seconds: 1800,
     },
   });
 
@@ -46,11 +55,20 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
     );
   }
 
-  // Log URL to stderr so it's visible in terminal
-  console.error(`\nPlaid Link URL: ${hostedLinkUrl}`);
-  console.error('Open this URL in your browser to connect your bank account.\n');
+  return {
+    link_url: hostedLinkUrl,
+    link_token: linkToken,
+  };
+}
 
-  // 2. Poll linkTokenGet until the session completes
+/**
+ * Step 2: Poll until the user completes the Plaid Link session, then exchange
+ * the token and store the connection.
+ */
+export async function completePlaidLink(db: Database, input: LinkPlaidCompleteInput): Promise<LinkPlaidCompleteResult> {
+  const client = getPlaidClient();
+  const { link_token: linkToken } = input;
+
   const deadline = Date.now() + POLL_TIMEOUT_MS;
   let publicToken: string | undefined;
 
@@ -62,17 +80,14 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
 
     if (!session) continue;
 
-    // Session started but not finished yet
     if (!session.finished_at) continue;
 
-    // Check if user successfully linked an item
     const itemResult = session.results?.item_add_results?.[0];
     if (itemResult?.public_token) {
       publicToken = itemResult.public_token;
       break;
     }
 
-    // Session finished but no item — user exited/abandoned
     const exitReason = session.exit?.error?.display_message
       ?? session.exit?.error?.error_message
       ?? 'User exited Plaid Link without connecting a bank.';
@@ -80,10 +95,10 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
   }
 
   if (!publicToken) {
-    throw new Error('Plaid Link timed out after 30 minutes. Run budgetclaw_plaid_link again.');
+    return { status: 'waiting' as const };
   }
 
-  // 3. Exchange public token for access token
+  // Exchange public token for access token
   const exchangeResponse = await client.itemPublicTokenExchange({
     public_token: publicToken,
   });
@@ -91,14 +106,13 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
   const accessToken = exchangeResponse.data.access_token;
   const itemId = exchangeResponse.data.item_id;
 
-  // 4. Fetch accounts to get institution info
+  // Fetch accounts to get institution info
   const accountsResponse = await client.accountsGet({ access_token: accessToken });
   const institutionId = accountsResponse.data.item.institution_id ?? null;
   const institutionName =
     input.institution_name ??
     (institutionId ? institutionId : 'Unknown Institution');
 
-  // Try to get the institution name from Plaid if we have an institution_id
   let resolvedInstitutionName = institutionName;
   if (institutionId) {
     try {
@@ -108,18 +122,18 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
       });
       resolvedInstitutionName = instResponse.data.institution.name;
     } catch {
-      // Non-fatal — use what we have
+      // Non-fatal
     }
   }
 
   const accountCount = accountsResponse.data.accounts.length;
 
-  // 5. Store access token in credential store
+  // Store access token
   const connectionId = crypto.randomUUID();
   const keychainKey = `plaid-${connectionId}`;
   await setCredential(keychainKey, accessToken);
 
-  // 6. Insert provider_connections row
+  // Insert provider_connections row
   const now = new Date().toISOString();
   db.prepare(`
     INSERT INTO provider_connections
@@ -128,9 +142,9 @@ export async function linkPlaid(db: Database, input: LinkPlaidInput): Promise<Li
   `).run(connectionId, 'plaid', institutionId, resolvedInstitutionName, itemId, keychainKey, now, now);
 
   return {
+    status: 'complete' as const,
     connection_id: connectionId,
     institution_name: resolvedInstitutionName,
     accounts_found: accountCount,
-    link_url: hostedLinkUrl,
   };
 }
