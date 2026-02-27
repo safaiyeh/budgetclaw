@@ -143,7 +143,7 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
 
   api.registerTool(tool({
     name: 'budgetclaw_delete_account',
-    description: 'Delete an account and all its data (transactions, holdings). For Plaid accounts, also removes the Plaid item, deletes all sibling accounts from the same bank connection, and cleans up credentials.',
+    description: 'DESTRUCTIVE: Delete an account and all its data (transactions, holdings). For Plaid accounts, also removes the Plaid item, deletes all sibling accounts from the same bank connection, and cleans up credentials. IMPORTANT: You MUST ask the user to confirm before calling this tool. Tell them exactly what will be deleted and wait for explicit confirmation.',
     parameters: {
       type: 'object',
       properties: {
