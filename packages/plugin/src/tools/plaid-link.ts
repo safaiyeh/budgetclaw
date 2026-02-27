@@ -35,6 +35,11 @@ export type LinkPlaidCompleteResult =
       transactions_added: number;
       holdings_synced: number;
     }
+  | {
+      status: 'duplicate';
+      connection_id: string;
+      institution_name: string;
+    }
   | { status: 'waiting' };
 
 /**
@@ -115,6 +120,21 @@ export async function completePlaidLink(db: Database, registry: ProviderRegistry
   const accessToken = exchangeResponse.data.access_token;
   const itemId = exchangeResponse.data.item_id;
 
+  // Duplicate detection: check if this item_id already exists
+  const existingByItem = db.prepare(
+    'SELECT id, institution_name FROM provider_connections WHERE item_id = ?'
+  ).get(itemId) as { id: string; institution_name: string } | undefined;
+
+  if (existingByItem) {
+    // Remove the duplicate Plaid item so it doesn't linger
+    try { await client.itemRemove({ access_token: accessToken }); } catch { /* best-effort */ }
+    return {
+      status: 'duplicate' as const,
+      connection_id: existingByItem.id,
+      institution_name: existingByItem.institution_name,
+    };
+  }
+
   // Fetch accounts to get institution info
   const accountsResponse = await client.accountsGet({ access_token: accessToken });
   const institutionId = accountsResponse.data.item.institution_id ?? null;
@@ -135,7 +155,21 @@ export async function completePlaidLink(db: Database, registry: ProviderRegistry
     }
   }
 
-  const accountCount = accountsResponse.data.accounts.length;
+  // Duplicate detection: check if this institution is already connected
+  const existingByInstitution = institutionId
+    ? db.prepare(
+        'SELECT id, institution_name FROM provider_connections WHERE institution_id = ?'
+      ).get(institutionId) as { id: string; institution_name: string } | undefined
+    : undefined;
+
+  if (existingByInstitution) {
+    try { await client.itemRemove({ access_token: accessToken }); } catch { /* best-effort */ }
+    return {
+      status: 'duplicate' as const,
+      connection_id: existingByInstitution.id,
+      institution_name: existingByInstitution.institution_name,
+    };
+  }
 
   // Store access token
   const connectionId = crypto.randomUUID();

@@ -525,7 +525,7 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
 
   api.registerTool(tool({
     name: 'budgetclaw_plaid_link_complete',
-    description: 'Finish connecting a bank after the user completes Plaid Link. Only call this after the user confirms they finished linking. Checks Plaid for completion, then automatically syncs accounts, transactions, and holdings. Returns {status:"complete"} with sync results, or {status:"waiting"} if not yet finished.',
+    description: 'Finish connecting a bank after the user completes Plaid Link. Only call this after the user confirms they finished linking. Checks Plaid for completion, detects duplicates, then automatically syncs accounts, transactions, and holdings. Returns {status:"complete"} with sync results, {status:"duplicate"} if the bank is already connected, or {status:"waiting"} if not yet finished.',
     parameters: {
       type: 'object',
       properties: {
