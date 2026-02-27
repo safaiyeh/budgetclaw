@@ -1,36 +1,7 @@
-import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
+import { Products, CountryCode } from 'plaid';
 import type { Database } from '../db/index.js';
 import { setCredential } from '../credentials/keychain.js';
-
-function getPlaidClient(): PlaidApi {
-  const clientId = process.env['PLAID_CLIENT_ID'];
-  const secret = process.env['PLAID_SECRET'];
-
-  if (!clientId) {
-    throw new Error(
-      'Missing env var: PLAID_CLIENT_ID\n' +
-      'Get your credentials at https://dashboard.plaid.com',
-    );
-  }
-  if (!secret) {
-    throw new Error(
-      'Missing env var: PLAID_SECRET\n' +
-      'Get your credentials at https://dashboard.plaid.com',
-    );
-  }
-
-  const config = new Configuration({
-    basePath: PlaidEnvironments['production'],
-    baseOptions: {
-      headers: {
-        'PLAID-CLIENT-ID': clientId,
-        'PLAID-SECRET': secret,
-      },
-    },
-  });
-
-  return new PlaidApi(config);
-}
+import { getPlaidClient } from '../providers/plaid-client.js';
 
 const POLL_INTERVAL_MS = 3_000;
 const POLL_TIMEOUT_MS = 30 * 60 * 1_000; // 30 minutes

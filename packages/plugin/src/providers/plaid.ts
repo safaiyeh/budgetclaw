@@ -1,7 +1,7 @@
-import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 import type { AccountType, AccountSubtype, Transaction, RemovedTransaction, Holding, Security } from 'plaid';
 import type { DataProvider, RawAccount, RawTransaction, RawBalance, RawHolding } from './interface.js';
 import type { ProviderConnectionMeta } from './registry.js';
+import { getPlaidClient } from './plaid-client.js';
 
 export class PlaidDataProvider implements DataProvider {
   readonly name = 'plaid';
@@ -10,25 +10,6 @@ export class PlaidDataProvider implements DataProvider {
     private readonly accessToken: string,
     private readonly _meta: ProviderConnectionMeta,
   ) {}
-
-  private getClient(): PlaidApi {
-    const clientId = process.env['PLAID_CLIENT_ID'];
-    const secret = process.env['PLAID_SECRET'];
-    if (!clientId) throw new Error('Missing env var: PLAID_CLIENT_ID');
-    if (!secret) throw new Error('Missing env var: PLAID_SECRET');
-
-    const config = new Configuration({
-      basePath: PlaidEnvironments['production'],
-      baseOptions: {
-        headers: {
-          'PLAID-CLIENT-ID': clientId,
-          'PLAID-SECRET': secret,
-        },
-      },
-    });
-
-    return new PlaidApi(config);
-  }
 
   private mapSecurityType(type: string | null): string {
     switch (type) {
@@ -57,7 +38,7 @@ export class PlaidDataProvider implements DataProvider {
   }
 
   async getAccounts(): Promise<RawAccount[]> {
-    const client = this.getClient();
+    const client = getPlaidClient();
     const response = await client.accountsGet({ access_token: this.accessToken });
 
     return response.data.accounts.map((a) => ({
@@ -75,7 +56,7 @@ export class PlaidDataProvider implements DataProvider {
     removed: string[];
     nextCursor: string;
   }> {
-    const client = this.getClient();
+    const client = getPlaidClient();
 
     const allAdded: RawTransaction[] = [];
     const allModified: RawTransaction[] = [];
@@ -130,7 +111,7 @@ export class PlaidDataProvider implements DataProvider {
   }
 
   async getBalances(): Promise<RawBalance[]> {
-    const client = this.getClient();
+    const client = getPlaidClient();
     const response = await client.accountsBalanceGet({ access_token: this.accessToken });
 
     return response.data.accounts.map((a) => ({
@@ -142,7 +123,7 @@ export class PlaidDataProvider implements DataProvider {
 
   async getHoldings(): Promise<RawHolding[]> {
     try {
-      const client = this.getClient();
+      const client = getPlaidClient();
       const response = await client.investmentsHoldingsGet({ access_token: this.accessToken });
       const { holdings, securities } = response.data;
 
