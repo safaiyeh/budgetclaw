@@ -117,6 +117,18 @@ When a user is new to BudgetClaw (no accounts exist), walk them through setup:
 
 ---
 
+## Deleting Accounts
+
+**Always confirm before deleting.** When a user asks to delete an account:
+
+1. Call `budgetclaw_get_accounts` to find the account.
+2. **Ask the user to confirm** before calling `budgetclaw_delete_account`. Tell them exactly what will be deleted:
+   - For manual accounts: "This will permanently delete [account name] and all its transactions and holdings."
+   - For Plaid accounts: "This will permanently delete [account name] and all other accounts from [institution], disconnect [institution] from Plaid, and remove all synced transactions and holdings."
+3. Only call `budgetclaw_delete_account` after the user confirms.
+
+---
+
 ## Disambiguation
 
 **"I paid my credit card"** — this is a transfer, not spending:
