@@ -208,31 +208,22 @@ Activate this workflow when the user says things like:
 
 Connect real bank accounts to automatically sync transactions and balances.
 
-> ⚠️ **Plaid is not free in production.** The sandbox environment is free and uses mock data.
-> The old Development environment was decommissioned in June 2024. For live bank connections,
-> a paid Plaid plan is required. The "200 free Limited Production calls" is a one-time trial only.
+> **Plaid is not free in production.** For live bank connections, a paid Plaid plan is required.
 
 ### Setup
 
 1. Create a Plaid account at [dashboard.plaid.com](https://dashboard.plaid.com)
 2. Copy your `PLAID_CLIENT_ID` and `PLAID_SECRET` from the dashboard
-3. Register `https://localhost:8181` as an allowed redirect URI (required for OAuth banks like Chase)
+3. Enable **Hosted Link** in your Plaid dashboard (Settings → Link Customization)
 4. Set environment variables:
    - `PLAID_CLIENT_ID` — your client ID
-   - `PLAID_SECRET` — your secret key
-   - `PLAID_ENV` — `sandbox` (default) or `production`
-   - `PLAID_LINK_PORT` — local server port (default: `8181`)
+   - `PLAID_SECRET` — your secret key (production)
 
 ### Connecting a Bank Account
 
-```
-budgetclaw_plaid_link
-```
+Run `budgetclaw_plaid_link` — it returns a Plaid-hosted URL. **Send that URL to the user** (it works on any device — phone, tablet, desktop). The user taps the link, signs in to their bank, and the tool automatically detects completion via polling.
 
-This opens Plaid Link in your browser. Sign in to your bank, then return to the terminal.
-The tool returns `{ connection_id, institution_name, accounts_found }`.
-
-For sandbox testing, use credentials: **user_good** / **pass_good**, select "First Platypus Bank".
+No local server, no certificates, no browser required on the machine running BudgetClaw.
 
 ### Syncing Transactions
 
@@ -240,7 +231,7 @@ After linking, use `budgetclaw_sync_connection` to pull transactions:
 
 | Step | Tool | Notes |
 |------|------|-------|
-| 1 | `budgetclaw_plaid_link` | One-time browser flow to connect bank |
+| 1 | `budgetclaw_plaid_link` | One-time — tap the link, sign in, done |
 | 2 | `budgetclaw_sync_connection { id: connection_id }` | First sync — pulls all available transactions |
 | 3 | `budgetclaw_get_transactions` | View synced transactions |
 | 4 | `budgetclaw_sync_connection { id: connection_id }` | Subsequent syncs — only new/modified/removed |
@@ -252,17 +243,9 @@ fetched. No duplicates.
 
 After syncing, `budgetclaw_get_accounts` shows the latest balances pulled from Plaid.
 
-### OAuth Banks (Chase, BofA, Capital One, Wells Fargo, USAA)
+### Credential Storage
 
-These institutions use OAuth redirect flows. Plaid handles this automatically — the only requirement
-is that `https://localhost:8181` is registered in your Plaid dashboard as a redirect URI.
-
-On first use, the plugin automatically generates a self-signed localhost TLS certificate stored at
-`~/.budgetclaw/tls/`. Your browser will show a certificate warning — click **Advanced → Proceed**
-to continue. This is a one-time prompt per browser.
-
-> Note: Getting Chase approved in Plaid Production can take **up to 6 weeks**. Sandbox works
-> immediately with test institutions.
+Plaid access tokens are stored in an encrypted file at `~/.budgetclaw/credentials.json.enc` (AES-256-GCM).
 
 ---
 

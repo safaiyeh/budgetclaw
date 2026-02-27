@@ -24,12 +24,13 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "keytar": "^7.9.0",
     "papaparse": "^5.4.1",
     "pdf-parse": "^1.1.1",
     "plaid": "^41.1.0",
-    "selfsigned": "^2.4.1",
     "yahoo-finance2": "^2.11.3"
+  },
+  "optionalDependencies": {
+    "keytar": "^7.9.0"
   },
   "peerDependencies": {
     "openclaw": "^2026.2.19-2"

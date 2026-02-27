@@ -1,53 +1,62 @@
 /**
- * Keychain wrapper using `keytar` for cross-platform OS keychain access.
+ * Credential store facade.
  *
- * Credentials are stored in the OS keychain under:
- *   service: "budgetclaw"
- *   account: <keychain_key>
- *
- * This means tokens are NEVER written to the SQLite database — only a
- * reference key (keychain_key) is stored in provider_connections.
+ * Default backend: encrypted file store (~/.budgetclaw/credentials.json.enc).
+ * Opt-in to OS keychain (keytar) by setting:
+ *   BUDGETCLAW_CREDENTIAL_BACKEND=keytar
  */
+
+import * as fileStore from './file-store.js';
 
 const SERVICE = 'budgetclaw';
 
-let _keytar: typeof import('keytar') | null = null;
+type Backend = {
+  setCredential(key: string, value: string): Promise<void>;
+  getCredential(key: string): Promise<string | null>;
+  deleteCredential(key: string): Promise<boolean>;
+};
 
-async function getKeytar(): Promise<typeof import('keytar')> {
-  if (!_keytar) {
+let _keytarBackend: Backend | null = null;
+
+async function getKeytarBackend(): Promise<Backend> {
+  if (!_keytarBackend) {
+    let keytar: typeof import('keytar');
     try {
-      _keytar = await import('keytar');
+      keytar = await import('keytar');
     } catch {
       throw new Error(
         'keytar is not available. Install it with: pnpm add keytar\n' +
-        'Note: keytar requires native bindings and may need build tools.'
+        'Or remove BUDGETCLAW_CREDENTIAL_BACKEND=keytar to use the default file store.'
       );
     }
+    _keytarBackend = {
+      async setCredential(key, value) { await keytar.setPassword(SERVICE, key, value); },
+      async getCredential(key) { return keytar.getPassword(SERVICE, key); },
+      async deleteCredential(key) { return keytar.deletePassword(SERVICE, key); },
+    };
   }
-  return _keytar;
+  return _keytarBackend;
 }
 
-/**
- * Store a credential in the OS keychain.
- */
+function useKeytar(): boolean {
+  return process.env['BUDGETCLAW_CREDENTIAL_BACKEND'] === 'keytar';
+}
+
+async function getBackend(): Promise<Backend> {
+  return useKeytar() ? getKeytarBackend() : fileStore;
+}
+
 export async function setCredential(key: string, value: string): Promise<void> {
-  const keytar = await getKeytar();
-  await keytar.setPassword(SERVICE, key, value);
+  const backend = await getBackend();
+  await backend.setCredential(key, value);
 }
 
-/**
- * Retrieve a credential from the OS keychain.
- * Returns null if not found.
- */
 export async function getCredential(key: string): Promise<string | null> {
-  const keytar = await getKeytar();
-  return keytar.getPassword(SERVICE, key);
+  const backend = await getBackend();
+  return backend.getCredential(key);
 }
 
-/**
- * Delete a credential from the OS keychain.
- */
 export async function deleteCredential(key: string): Promise<boolean> {
-  const keytar = await getKeytar();
-  return keytar.deletePassword(SERVICE, key);
+  const backend = await getBackend();
+  return backend.deleteCredential(key);
 }
