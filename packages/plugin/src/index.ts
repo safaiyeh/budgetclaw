@@ -10,7 +10,7 @@ import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { getDb } from './db/index.js';
 
 // Tool handlers
-import { addAccount, getAccounts, updateAccountBalance } from './tools/accounts.js';
+import { addAccount, getAccounts, updateAccountBalance, deleteAccount } from './tools/accounts.js';
 import {
   addTransaction,
   getTransactions,
@@ -139,6 +139,19 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
       required: ['id', 'balance'],
     },
     execute: (p) => updateAccountBalance(db, p as Parameters<typeof updateAccountBalance>[1]),
+  }));
+
+  api.registerTool(tool({
+    name: 'budgetclaw_delete_account',
+    description: 'Delete an account and all its data (transactions, holdings). For Plaid accounts, also removes the Plaid item, deletes all sibling accounts from the same bank connection, and cleans up credentials.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: 'Account ID to delete' },
+      },
+      required: ['id'],
+    },
+    execute: (p) => deleteAccount(db, p as { id: string }),
   }));
 
   // ── Transactions ──────────────────────────────────────────────────────────
