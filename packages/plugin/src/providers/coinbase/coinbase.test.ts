@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { CoinbaseDataProvider } from './coinbase.js';
+import { CoinbaseDataProvider } from './index.js';
 
 // ─── Mock fetch ──────────────────────────────────────────────────────────────
 

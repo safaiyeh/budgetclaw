@@ -1,10 +1,10 @@
-import type { Database } from '../db/index.js';
-import { toRow } from '../db/types.js';
-import type { ProviderConnectionRow } from '../db/types.js';
-import { getCredential, deleteCredential } from '../credentials/keychain.js';
-import type { ProviderRegistry } from '../providers/registry.js';
-import { upsertHolding } from './portfolio.js';
-import type { AssetType } from '../prices/interface.js';
+import type { Database } from '../../db/index.js';
+import { toRow } from '../../db/types.js';
+import type { ProviderConnectionRow } from '../../db/types.js';
+import { getCredential, deleteCredential } from '../../credentials/keychain.js';
+import type { ProviderRegistry } from '../../providers/registry.js';
+import { upsertHolding } from '../portfolio/index.js';
+import type { AssetType } from '../../prices/interface.js';
 
 function now(): string {
   return new Date().toISOString();

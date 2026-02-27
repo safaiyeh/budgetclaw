@@ -1,8 +1,8 @@
-import type { Database } from '../db/index.js';
-import { toRow } from '../db/types.js';
-import type { PortfolioHoldingRow } from '../db/types.js';
-import type { AssetType } from '../prices/interface.js';
-import { priceRegistry } from '../prices/registry.js';
+import type { Database } from '../../db/index.js';
+import { toRow } from '../../db/types.js';
+import type { PortfolioHoldingRow } from '../../db/types.js';
+import type { AssetType } from '../../prices/interface.js';
+import { priceRegistry } from '../../prices/registry.js';
 
 function uuid(): string {
   return crypto.randomUUID();

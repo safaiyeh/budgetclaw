@@ -1,8 +1,8 @@
-import type { Database } from '../db/index.js';
-import { toRow } from '../db/types.js';
-import type { AccountRow, ProviderConnectionRow } from '../db/types.js';
-import { getCredential, deleteCredential } from '../credentials/keychain.js';
-import type { ProviderRegistry } from '../providers/registry.js';
+import type { Database } from '../../db/index.js';
+import { toRow } from '../../db/types.js';
+import type { AccountRow, ProviderConnectionRow } from '../../db/types.js';
+import { getCredential, deleteCredential } from '../../credentials/keychain.js';
+import type { ProviderRegistry } from '../../providers/registry.js';
 
 const ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'investment', 'crypto', 'loan', 'other'] as const;
 type AccountType = (typeof ACCOUNT_TYPES)[number];

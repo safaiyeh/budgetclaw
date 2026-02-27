@@ -13,8 +13,8 @@
  *   - All returned as `added` (Coinbase txns are immutable)
  */
 
-import type { DataProvider, RawAccount, RawTransaction, RawBalance, RawHolding } from './interface.js';
-import { CoinbaseClient, type CoinbaseAccount, type CoinbaseTransaction } from './coinbase-client.js';
+import type { DataProvider, RawAccount, RawTransaction, RawBalance, RawHolding } from '../interface.js';
+import { CoinbaseClient, type CoinbaseAccount, type CoinbaseTransaction } from './client.js';
 
 const CRYPTO_ACCOUNT_EXTERNAL_ID = 'coinbase-crypto-aggregate';
 

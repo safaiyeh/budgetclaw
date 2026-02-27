@@ -6,9 +6,9 @@ import {
   type Holding,
   type Security,
 } from 'plaid';
-import type { DataProvider, RawAccount, RawTransaction, RawBalance, RawHolding } from './interface.js';
-import type { ProviderConnectionMeta } from './registry.js';
-import { getPlaidClient } from './plaid-client.js';
+import type { DataProvider, RawAccount, RawTransaction, RawBalance, RawHolding } from '../interface.js';
+import type { ProviderConnectionMeta } from '../registry.js';
+import { getPlaidClient } from './client.js';
 
 export class PlaidDataProvider implements DataProvider {
   readonly name = 'plaid';

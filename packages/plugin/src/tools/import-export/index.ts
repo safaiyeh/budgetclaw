@@ -1,8 +1,8 @@
 import { writeFileSync } from 'node:fs';
-import type { Database } from '../db/index.js';
-import { toRow } from '../db/types.js';
-import type { AccountRow } from '../db/types.js';
-import { CsvDataProvider, type CsvImportOptions } from '../providers/csv.js';
+import type { Database } from '../../db/index.js';
+import { toRow } from '../../db/types.js';
+import type { AccountRow } from '../../db/types.js';
+import { CsvDataProvider, type CsvImportOptions } from '../../providers/csv/index.js';
 import Papa from 'papaparse';
 
 export interface ImportCsvInput {

@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import type { Database } from '../db/index.js';
-import { toRow } from '../db/types.js';
-import type { AccountRow } from '../db/types.js';
+import type { Database } from '../../db/index.js';
+import { toRow } from '../../db/types.js';
+import type { AccountRow } from '../../db/types.js';
 
 export interface ReadStatementInput {
   file_path: string;

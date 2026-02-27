@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
-import { getDb, resetDb } from '../db/index.js';
-import { addAccount } from './accounts.js';
+import { getDb, resetDb } from '../../db/index.js';
+import { addAccount } from '../accounts/index.js';
 import { readStatement, importTransactions } from './statements.js';
 
 // Mock pdf-parse so tests don't need a real PDF file

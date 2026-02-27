@@ -8,11 +8,11 @@
  * 5. Auto-sync via syncConnection()
  */
 
-import type { Database } from '../db/index.js';
-import { setCredential } from '../credentials/keychain.js';
-import { CoinbaseClient } from '../providers/coinbase-client.js';
-import { syncConnection } from './connections.js';
-import type { ProviderRegistry } from '../providers/registry.js';
+import type { Database } from '../../db/index.js';
+import { setCredential } from '../../credentials/keychain.js';
+import { CoinbaseClient } from '../../providers/coinbase/client.js';
+import { syncConnection } from './index.js';
+import type { ProviderRegistry } from '../../providers/registry.js';
 
 export interface LinkCoinbaseInput {
   api_key: string;

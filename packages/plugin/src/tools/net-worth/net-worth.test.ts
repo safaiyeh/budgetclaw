@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getDb, resetDb } from '../db/index.js';
-import { addAccount, updateAccountBalance } from './accounts.js';
-import { upsertHolding } from './portfolio.js';
-import { snapshotNetWorth, getNetWorthHistory } from './net-worth.js';
+import { getDb, resetDb } from '../../db/index.js';
+import { addAccount, updateAccountBalance } from '../accounts/index.js';
+import { upsertHolding } from '../portfolio/index.js';
+import { snapshotNetWorth, getNetWorthHistory } from './index.js';
 
 describe('Net Worth', () => {
   beforeEach(() => { resetDb(); });

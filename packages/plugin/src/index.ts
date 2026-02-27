@@ -10,26 +10,26 @@ import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
 import { getDb } from './db/index.js';
 
 // Tool handlers
-import { addAccount, getAccounts, updateAccountBalance, deleteAccount } from './tools/accounts.js';
+import { addAccount, getAccounts, updateAccountBalance, deleteAccount } from './tools/accounts/index.js';
 import {
   addTransaction,
   getTransactions,
   updateTransaction,
   deleteTransaction,
   getSpendingSummary,
-} from './tools/transactions.js';
-import { setBudget, getBudgets, deleteBudget } from './tools/budgets.js';
-import { upsertHolding, deleteHolding, getPortfolio, refreshPrices } from './tools/portfolio.js';
-import { snapshotNetWorth, getNetWorthHistory } from './tools/net-worth.js';
-import { getCategories, addCategory, deleteCategory } from './tools/categories.js';
-import { importCsv, exportCsv } from './tools/import-export.js';
-import { readStatement, importTransactions } from './tools/statements.js';
-import { listConnections, syncConnection } from './tools/connections.js';
+} from './tools/transactions/index.js';
+import { setBudget, getBudgets, deleteBudget } from './tools/budgets/index.js';
+import { upsertHolding, deleteHolding, getPortfolio, refreshPrices } from './tools/portfolio/index.js';
+import { snapshotNetWorth, getNetWorthHistory } from './tools/net-worth/index.js';
+import { getCategories, addCategory, deleteCategory } from './tools/categories/index.js';
+import { importCsv, exportCsv } from './tools/import-export/index.js';
+import { readStatement, importTransactions } from './tools/import-export/statements.js';
+import { listConnections, syncConnection } from './tools/connections/index.js';
 import { defaultRegistry } from './providers/registry.js';
-import { PlaidDataProvider } from './providers/plaid.js';
-import { CoinbaseDataProvider } from './providers/coinbase.js';
-import { startPlaidLink, completePlaidLink } from './tools/plaid-link.js';
-import { linkCoinbase } from './tools/coinbase-link.js';
+import { PlaidDataProvider } from './providers/plaid/index.js';
+import { CoinbaseDataProvider } from './providers/coinbase/index.js';
+import { startPlaidLink, completePlaidLink } from './tools/connections/plaid-link.js';
+import { linkCoinbase } from './tools/connections/coinbase-link.js';
 
 // ─── Local helpers ────────────────────────────────────────────────────────────
 
@@ -566,8 +566,8 @@ export { getDb, resetDb } from './db/index.js';
 export type { AccountRow, TransactionRow, BudgetRow, PortfolioHoldingRow, NetWorthSnapshotRow } from './db/types.js';
 export type { DataProvider, RawAccount, RawTransaction, RawBalance } from './providers/interface.js';
 export type { PriceProvider, PriceResult, AssetType } from './prices/interface.js';
-export { CsvDataProvider } from './providers/csv.js';
-export { CoinbaseDataProvider } from './providers/coinbase.js';
+export { CsvDataProvider } from './providers/csv/index.js';
+export { CoinbaseDataProvider } from './providers/coinbase/index.js';
 export { defaultRegistry, ProviderRegistry } from './providers/registry.js';
 export type { ProviderFactory, ProviderConnectionMeta } from './providers/registry.js';
 export { priceRegistry } from './prices/registry.js';

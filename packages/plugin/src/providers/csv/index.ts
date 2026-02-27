@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import Papa from 'papaparse';
-import type { DataProvider, RawAccount, RawTransaction, RawBalance } from './interface.js';
+import type { DataProvider, RawAccount, RawTransaction, RawBalance } from '../interface.js';
 
 export interface CsvColumnMapping {
   /** Column name that maps to transaction date */
