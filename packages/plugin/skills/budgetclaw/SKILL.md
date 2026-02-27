@@ -127,6 +127,12 @@ When a user is new to BudgetClaw (no accounts exist), walk them through setup:
    - For Plaid accounts: "This will permanently delete [account name] and all other accounts from [institution], disconnect [institution] from Plaid, and remove all synced transactions and holdings."
 3. Only call `budgetclaw_delete_account` after the user confirms.
 
+**To delete ALL accounts and start fresh:**
+
+1. Call `budgetclaw_get_accounts` to list all accounts.
+2. Ask the user to confirm they want to delete everything.
+3. Call `budgetclaw_delete_account` for **each account** one at a time. It handles Plaid item removal, credential cleanup, and cascade-deletes transactions and holdings.
+
 ---
 
 ## Disambiguation

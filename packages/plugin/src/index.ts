@@ -24,7 +24,7 @@ import { snapshotNetWorth, getNetWorthHistory } from './tools/net-worth.js';
 import { getCategories, addCategory, deleteCategory } from './tools/categories.js';
 import { importCsv, exportCsv } from './tools/import-export.js';
 import { readStatement, importTransactions } from './tools/statements.js';
-import { listConnections, removeConnection, syncConnection } from './tools/connections.js';
+import { listConnections, syncConnection } from './tools/connections.js';
 import { defaultRegistry } from './providers/registry.js';
 import { PlaidDataProvider } from './providers/plaid.js';
 import { startPlaidLink, completePlaidLink } from './tools/plaid-link.js';
@@ -143,7 +143,7 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
 
   api.registerTool(tool({
     name: 'budgetclaw_delete_account',
-    description: 'Delete an account and all its data (transactions, holdings). For Plaid accounts, also removes the Plaid item, deletes all sibling accounts from the same bank connection, and cleans up credentials.',
+    description: 'DESTRUCTIVE: Delete an account and all its data (transactions, holdings). For Plaid accounts, also removes the Plaid item, deletes all sibling accounts from the same bank connection, and cleans up credentials. IMPORTANT: You MUST ask the user to confirm before calling this tool. Tell them exactly what will be deleted and wait for explicit confirmation.',
     parameters: {
       type: 'object',
       properties: {
@@ -496,17 +496,6 @@ export function register(api: OpenClawPluginApi, dbPath?: string): void {
     description: 'List all provider connections (e.g. Plaid-linked institutions)',
     parameters: { type: 'object', properties: {} },
     execute: () => listConnections(db),
-  }));
-
-  api.registerTool(tool({
-    name: 'budgetclaw_remove_connection',
-    description: 'Remove a provider connection and delete its credential from the OS keychain',
-    parameters: {
-      type: 'object',
-      properties: { id: { type: 'string', description: 'Connection ID' } },
-      required: ['id'],
-    },
-    execute: (p) => removeConnection(db, (p as {id:string}).id),
   }));
 
   api.registerTool(tool({
