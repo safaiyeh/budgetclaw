@@ -1,4 +1,11 @@
-import type { AccountType, AccountSubtype, Transaction, RemovedTransaction, Holding, Security } from 'plaid';
+import {
+  AccountType,
+  AccountSubtype,
+  type Transaction,
+  type RemovedTransaction,
+  type Holding,
+  type Security,
+} from 'plaid';
 import type { DataProvider, RawAccount, RawTransaction, RawBalance, RawHolding } from './interface.js';
 import type { ProviderConnectionMeta } from './registry.js';
 import { getPlaidClient } from './plaid-client.js';
@@ -26,14 +33,14 @@ export class PlaidDataProvider implements DataProvider {
     type: AccountType | undefined,
     subtype: AccountSubtype | null | undefined,
   ): RawAccount['type'] {
-    if (type === 'depository') {
-      if (subtype === 'checking') return 'checking';
-      if (subtype === 'savings') return 'savings';
+    if (type === AccountType.Depository) {
+      if (subtype === AccountSubtype.Checking) return 'checking';
+      if (subtype === AccountSubtype.Savings) return 'savings';
       return 'checking';
     }
-    if (type === 'credit') return 'credit';
-    if (type === 'investment' || type === 'brokerage') return 'investment';
-    if (type === 'loan') return 'loan';
+    if (type === AccountType.Credit) return 'credit';
+    if (type === AccountType.Investment || type === AccountType.Brokerage) return 'investment';
+    if (type === AccountType.Loan) return 'loan';
     return 'other';
   }
 
