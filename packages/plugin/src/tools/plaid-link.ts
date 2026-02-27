@@ -51,7 +51,8 @@ export async function startPlaidLink(_db: Database, input: LinkPlaidInput): Prom
   const linkTokenResponse = await client.linkTokenCreate({
     user: { client_user_id: 'budgetclaw-user' },
     client_name: 'BudgetClaw',
-    products: [Products.Transactions, Products.Investments],
+    products: [Products.Transactions],
+    additional_consented_products: [Products.Investments],
     country_codes: [CountryCode.Us],
     language: 'en',
     hosted_link: {
