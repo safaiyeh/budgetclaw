@@ -218,8 +218,9 @@ export async function syncConnection(
     }
   }
 
-  // 7. Sync holdings — only for providers that support it (e.g. Plaid investments)
-  if (provider.getHoldings) {
+  // 7. Sync holdings — only for providers that support it AND when investment accounts exist
+  const hasInvestmentAccounts = rawAccounts.some((a) => a.type === 'investment');
+  if (provider.getHoldings && hasInvestmentAccounts) {
     const rawHoldings = await provider.getHoldings();
     const updatePriceSourceStmt = db.prepare(
       `UPDATE portfolio_holdings
