@@ -131,8 +131,7 @@ When a user is new to BudgetClaw (no accounts exist), walk them through setup:
 
 1. Call `budgetclaw_get_accounts` to list all accounts.
 2. Ask the user to confirm they want to delete everything.
-3. Call `budgetclaw_delete_account` for **each account** one at a time. This is the ONLY way to delete accounts — it handles Plaid item removal, credential cleanup, and cascade-deletes transactions and holdings.
-4. Do NOT use `budgetclaw_remove_connection` to delete accounts — it only removes the connection metadata, not the accounts or Plaid item.
+3. Call `budgetclaw_delete_account` for **each account** one at a time. It handles Plaid item removal, credential cleanup, and cascade-deletes transactions and holdings.
 
 ---
 
